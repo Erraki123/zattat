@@ -8,11 +8,12 @@ const ListeCours = () => {
   const [professeurs, setProfesseurs] = useState([]);
   const [coursActuel, setCoursActuel] = useState(null);
   const [hoveredCard, setHoveredCard] = useState(null);
-  
+  const [professeurs_selectionnes, setProfesseursSelectionnes] = useState([]);
+
   // États pour le modal d'ajout de cours
   const [showAjoutModal, setShowAjoutModal] = useState(false);
   const [nom, setNom] = useState('');
-  const [professeur, setProfesseur] = useState('');
+  // const [professeur, setProfesseur] = useState(''); // ❌ plus utilisé
   const [message, setMessage] = useState('');
 
   // États pour le modal de confirmation de suppression
@@ -59,12 +60,12 @@ const ListeCours = () => {
   // Fonction pour ajouter un cours
   const handleAjoutCours = async (e) => {
     e.preventDefault();
-    
-    if (!nom.trim() || !professeur.trim()) {
-      setMessage('❌ Veuillez remplir tous les champs');
+
+    if (!nom.trim() || professeurs_selectionnes.length === 0) {
+      setMessage('❌ Veuillez remplir tous les champs et sélectionner au moins un professeur');
       return;
     }
-    
+
     try {
       const token = localStorage.getItem('token');
       const response = await fetch('http://localhost:5000/api/cours', {
@@ -73,17 +74,20 @@ const ListeCours = () => {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
-        body: JSON.stringify({ nom: nom.trim(), professeur: professeur.trim() })
+        body: JSON.stringify({
+          nom: nom.trim(),
+          professeur: professeurs_selectionnes // tableau de noms
+        })
       });
-      
+
       if (response.ok) {
         const nouveauCours = await response.json();
         setCours([...cours, nouveauCours]);
-        
+
         setMessage('✅ Cours ajouté avec succès');
         setNom('');
-        setProfesseur('');
-        
+        setProfesseursSelectionnes([]);
+
         setTimeout(() => {
           setShowAjoutModal(false);
           setMessage('');
@@ -92,7 +96,7 @@ const ListeCours = () => {
         const errorData = await response.json();
         setMessage('❌ Erreur: ' + (errorData.message || 'Erreur inconnue'));
       }
-      
+
     } catch (err) {
       setMessage('❌ Erreur: ' + (err.message || 'Erreur de connexion'));
     }
@@ -143,7 +147,7 @@ const ListeCours = () => {
   const fermerModalAjout = () => {
     setShowAjoutModal(false);
     setNom('');
-    setProfesseur('');
+    setProfesseursSelectionnes([]);
     setMessage('');
   };
 
@@ -664,9 +668,14 @@ const ListeCours = () => {
                     </h3>
                     
                     <div style={styles.professeurInfo}>
-                      <User size={16} />
-                      <span>{c.professeur || 'Non assigné'}</span>
-                    </div>
+  <User size={16} />
+  <span>
+    {Array.isArray(c.professeur)
+      ? c.professeur.join(', ')
+      : c.professeur || 'Non assigné'}
+  </span>
+</div>
+
                   </div>
                   
                   <div style={styles.coursFooter}>
@@ -764,30 +773,89 @@ const ListeCours = () => {
                   />
                 </div>
 
+                {/* Professeurs avec checkboxes */}
                 <div style={styles.formGroup}>
-                  <label style={styles.label}>Professeur</label>
-                  <select
-                    value={professeur}
-                    onChange={(e) => setProfesseur(e.target.value)}
-                    style={styles.select}
-                    onFocus={(e) => {
-                      e.target.style.borderColor = '#3b82f6';
-                      e.target.style.backgroundColor = 'white';
-                      e.target.style.boxShadow = '0 0 0 3px rgba(59, 130, 246, 0.1)';
-                    }}
-                    onBlur={(e) => {
-                      e.target.style.borderColor = '#d1d5db';
-                      e.target.style.backgroundColor = '#f9fafb';
-                      e.target.style.boxShadow = 'none';
-                    }}
-                  >
-                    <option value="">-- Sélectionner un professeur --</option>
+                  <label style={styles.label}>Professeurs</label>
+                  <div style={{
+                    maxHeight: '200px',
+                    overflowY: 'auto',
+                    border: '1px solid #d1d5db',
+                    borderRadius: '0.75rem',
+                    padding: '8px',
+                    backgroundColor: '#f9fafb'
+                  }}>
                     {professeurs.map((p) => (
-                      <option key={p._id} value={p.nom}>
-                        {p.nom} ({p.email})
-                      </option>
+                      <label key={p._id} style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        padding: '8px',
+                        cursor: 'pointer',
+                        borderRadius: '0.5rem',
+                        transition: 'background-color 0.2s ease'
+                      }}
+                        onMouseEnter={e => { e.target.style.backgroundColor = '#e5e7eb'; }}
+                        onMouseLeave={e => { e.target.style.backgroundColor = 'transparent'; }}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={professeurs_selectionnes.includes(p.nom)}
+                          onChange={() => {
+                            setProfesseursSelectionnes(prev =>
+                              prev.includes(p.nom)
+                                ? prev.filter(nom => nom !== p.nom)
+                                : [...prev, p.nom]
+                            );
+                          }}
+                          style={{
+                            marginRight: '12px',
+                            width: '16px',
+                            height: '16px',
+                            accentColor: '#3b82f6'
+                          }}
+                        />
+                        <span style={{ fontSize: '0.875rem' }}>
+                          {p.nom} ({p.email})
+                        </span>
+                      </label>
                     ))}
-                  </select>
+                  </div>
+                  {/* Affichage des sélections */}
+                  {professeurs_selectionnes.length > 0 && (
+                    <div style={{ marginTop: '10px' }}>
+                      <div style={{ fontSize: '0.875rem', fontWeight: '600', color: '#374151', marginBottom: '0.5rem' }}>
+                        {professeurs_selectionnes.length} professeur(s) sélectionné(s)
+                      </div>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '5px' }}>
+                        {professeurs_selectionnes.map((nom, index) => (
+                          <span key={index} style={{
+                            backgroundColor: '#dbeafe',
+                            color: '#1e40af',
+                            padding: '4px 8px',
+                            borderRadius: '12px',
+                            fontSize: '12px',
+                            border: '1px solid #bfdbfe'
+                          }}>
+                            {nom}
+                            <button
+                              type="button"
+                              onClick={() => setProfesseursSelectionnes(prev => prev.filter(n => n !== nom))}
+                              style={{
+                                marginLeft: '5px',
+                                background: 'none',
+                                border: 'none',
+                                cursor: 'pointer',
+                                fontSize: '14px',
+                                color: '#1e40af',
+                                fontWeight: 'bold'
+                              }}
+                            >
+                              ×
+                            </button>
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 {message && (
@@ -799,7 +867,7 @@ const ListeCours = () => {
                   </div>
                 )}
 
-              <div style={styles.buttonGroup}>
+                <div style={styles.buttonGroup}>
                   <button
                     type="button"
                     onClick={fermerModalAjout}
@@ -924,10 +992,15 @@ const ListeCours = () => {
                   </div>
                   <div>
                     <h2 style={styles.modalTitle}>{coursActuel.nom}</h2>
-                    <div style={{display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#6b7280', fontSize: '0.875rem', marginTop: '0.25rem'}}>
-                      <User size={16} />
-                      <span>{coursActuel.professeur || 'Non assigné'}</span>
-                    </div>
+                  <div style={{display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#6b7280', fontSize: '0.875rem', marginTop: '0.25rem'}}>
+  <User size={16} />
+  <span>
+    {Array.isArray(coursActuel.professeur)
+      ? coursActuel.professeur.join(', ')
+      : coursActuel.professeur || 'Non assigné'}
+  </span>
+</div>
+
                   </div>
                 </div>
                 <button

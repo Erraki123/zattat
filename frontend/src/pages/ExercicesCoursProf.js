@@ -293,14 +293,14 @@ const ExercicesCoursProf = () => {
       display: 'inline-flex',
       alignItems: 'center',
       gap: '6px',
-      color: '#2563eb',
+      color: 'white',
       textDecoration: 'none',
       fontSize: '14px',
       fontWeight: '500',
       padding: '6px 12px',
       borderRadius: '6px',
       border: '1px solid #e0e7ff',
-      backgroundColor: '#f8fafc',
+      backgroundColor: '#2563eb',
       transition: 'all 0.2s'
     },
     remarqueContainer: {
@@ -565,8 +565,8 @@ const ExercicesCoursProf = () => {
                         rel="noreferrer"
                         style={styles.downloadLink}
                       >
-                        <Download size={16} />
-                        Télécharger le fichier
+                        <Eye size={16} />
+                        Voir le fichier
                       </a>
                     </div>
                   </div>

@@ -476,6 +476,7 @@ const ListeCoursProf = () => {
                     )}
                   </div>
                 </div>
+                
 
                 <div style={styles.coursStats}>
                   <div style={styles.statItem}>

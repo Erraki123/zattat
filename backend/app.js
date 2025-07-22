@@ -321,23 +321,29 @@ app.get('/api/etudiants', authAdmin, async (req, res) => {
 
 app.post('/api/cours', authAdmin, async (req, res) => {
   try {
-    const { nom, professeur } = req.body; // nom = "Arabe", professeur = "Prof. Ahmed"
+    let { nom, professeur } = req.body;
 
+    // ✅ تحويل professeur إلى مصفوفة إذا لم يكن مصفوفة
+    if (!Array.isArray(professeur)) {
+      professeur = [professeur];
+    }
+
+    // التحقق من عدم تكرار الكورس
     const existe = await Cours.findOne({ nom });
     if (existe) return res.status(400).json({ message: 'Cours déjà existant' });
 
     const cours = new Cours({
       nom,
-      professeur, // فقط الاسم
+      professeur, // مصفوفة من الأسماء
       creePar: req.adminId
     });
 
     await cours.save();
 
-    // 🔴 هنا نضيف هذا cours إلى المدرّس المختار
-    const prof = await Professeur.findOne({ nom: professeur });
-    if (prof) {
-      if (!prof.cours.includes(nom)) {
+    // تحديث كل أستاذ وربط الكورس به
+    for (const profNom of professeur) {
+      const prof = await Professeur.findOne({ nom: profNom });
+      if (prof && !prof.cours.includes(nom)) {
         prof.cours.push(nom);
         await prof.save();
       }
@@ -345,9 +351,11 @@ app.post('/api/cours', authAdmin, async (req, res) => {
 
     res.status(201).json(cours);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error('❌ Erreur ajout cours:', err);
+    res.status(500).json({ error: err.message || 'Erreur inconnue côté serveur' });
   }
 });
+
 
 
 
@@ -1444,13 +1452,27 @@ app.delete('/api/cours/:id', authAdmin, async (req, res) => {
       return res.status(404).json({ message: 'Cours non trouvé' });
     }
 
+    // ✅ Supprimer le cours de la base
     await Cours.findByIdAndDelete(coursId);
 
-    res.json({ message: '✅ Cours supprimé avec succès' });
+    // ✅ Supprimer le nom du cours chez tous les étudiants
+    await Etudiant.updateMany(
+      { cours: cours.nom },
+      { $pull: { cours: cours.nom } }
+    );
+
+    // ✅ Supprimer le nom du cours chez tous les professeurs
+    await Professeur.updateMany(
+      { cours: cours.nom },
+      { $pull: { cours: cours.nom } }
+    );
+
+    res.json({ message: `✅ Cours "${cours.nom}" supprimé avec succès` });
   } catch (err) {
     res.status(500).json({ message: '❌ Erreur lors de la suppression', error: err.message });
   }
 });
+
 
 
 // ✅ Route pour vider la liste des notifications supprimées (optionnel - pour admin)
@@ -1595,14 +1617,55 @@ app.post('/api/professeurs/login', async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+
+
+
 app.put('/api/professeurs/:id', authAdmin, upload.single('image'), async (req, res) => {
   try {
-    const { nom, genre, dateNaissance, telephone, email, motDePasse, actif } = req.body;
+    const professeurId = req.params.id;
+    const {
+      nom,
+      genre,
+      dateNaissance,
+      telephone,
+      email,
+      motDePasse,
+      actif
+    } = req.body;
+
     let cours = req.body.cours;
 
-    // Assurez-vous que "cours" est un tableau
+    // 🧠 Assurez-vous que cours est un tableau
+    if (!cours) cours = [];
     if (typeof cours === 'string') cours = [cours];
 
+    // 🔍 Récupérer l'ancien professeur pour détecter les cours supprimés
+    const ancienProf = await Professeur.findById(professeurId);
+    if (!ancienProf) return res.status(404).json({ message: "Professeur introuvable" });
+
+    const ancienCours = ancienProf.cours || [];
+
+    // 🔁 Trouver les cours supprimés
+    const coursSupprimes = ancienCours.filter(c => !cours.includes(c));
+    const coursAjoutes = cours.filter(c => !ancienCours.includes(c));
+
+    // 🔁 Supprimer ce professeur des anciens cours
+    for (const coursNom of coursSupprimes) {
+      await Cours.updateOne(
+        { nom: coursNom },
+        { $pull: { professeur: ancienProf.nom } }
+      );
+    }
+
+    // 🔁 Ajouter ce professeur aux nouveaux cours
+    for (const coursNom of coursAjoutes) {
+      await Cours.updateOne(
+        { nom: coursNom },
+        { $addToSet: { professeur: nom } }
+      );
+    }
+
+    // 📦 Préparer les données à mettre à jour
     const updateData = {
       nom,
       genre,
@@ -1613,27 +1676,29 @@ app.put('/api/professeurs/:id', authAdmin, upload.single('image'), async (req, r
       actif: actif === 'true' || actif === true
     };
 
-    // Image
     if (req.file) {
       updateData.image = `/uploads/${req.file.filename}`;
     }
 
-    // Nouveau mot de passe (optionnel)
     if (motDePasse && motDePasse.trim() !== '') {
       updateData.motDePasse = await bcrypt.hash(motDePasse, 10);
     }
 
-    const updated = await Professeur.findByIdAndUpdate(req.params.id, updateData, {
-      new: true,
-      runValidators: true
-    }).select('-motDePasse');
+    // ✅ Mettre à jour le professeur
+    const updatedProf = await Professeur.findByIdAndUpdate(
+      professeurId,
+      updateData,
+      { new: true, runValidators: true }
+    ).select('-motDePasse');
 
-    res.json({ message: 'Professeur modifié avec succès', professeur: updated });
+    res.json({ message: "✅ Professeur modifié avec succès", professeur: updatedProf });
+
   } catch (err) {
-    console.error('❌ Erreur modification:', err);
-    res.status(500).json({ message: 'Erreur lors de la modification', error: err.message });
+    console.error('❌ Erreur lors de la modification:', err);
+    res.status(500).json({ message: "Erreur lors de la modification", error: err.message });
   }
 });
+
 // routes/professeurs.js
 app.patch('/api/professeurs/:id/actif', authAdmin, async (req, res) => {
   try {
@@ -1903,6 +1968,7 @@ app.post('/api/messages/upload', authEtudiant, uploadMessageFile.single('fichier
     res.status(500).json({ message: 'Erreur serveur', error: err.message });
   }
 });
+
 // ✅ Lister les paiements
 app.get('/api/paiements', authAdmin, async (req, res) => {
   try {

@@ -2,8 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { 
   BookOpen, 
   Search, 
-  Filter, 
-  Download, 
+  Eye, 
   MessageSquare, 
   Calendar, 
   FileText, 
@@ -669,8 +668,8 @@ const MesExercicesEtudiant = () => {
                     e.target.style.transform = 'translateY(0)';
                   }}
                 >
-                  <Download size={16} />
-                  Télécharger le fichier
+                  <Eye size={16} />
+                  Voir le fichier
                 </a>
 
                 {canDelete ? (

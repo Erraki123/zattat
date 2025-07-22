@@ -362,7 +362,7 @@ const TeleverserExerciceEtudiant = () => {
             onClick={handleSubmit}
             disabled={isSubmitting}
             style={{
-              backgroundColor:'blue',
+              backgroundColor:'#4f46e5',
               color: 'white',
               border: 'none',
               padding: '18px 40px',
