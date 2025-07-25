@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import './AdminDashboard.css';
 import Sidebar from '../components/Sidebar'; // ✅ استيراد صحيح
+import RappelModal from '../components/RappelModal'; // adapte le chemin si besoin
 
 import Header from '../components/Header';
 import { useNavigate } from 'react-router-dom';
@@ -43,10 +44,72 @@ const AdminDashboard = () => {
   });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+const [rappelModal, setRappelModal] = useState(null);
+const [editDate, setEditDate] = useState('');
+const [editNote, setEditNote] = useState('');
 
   useEffect(() => {
     fetchDashboardData();
   }, []);
+  useEffect(() => {
+  const fetchRappels = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const headers = {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      };
+
+      const res = await fetch('http://localhost:5000/api/rappels', { headers });
+      if (!res.ok) throw new Error('Erreur lors du chargement des rappels');
+
+      const data = await res.json();
+
+      // ✅ تصفية التذكيرات حسب التاريخ الحالي
+      const today = new Date();
+      const rappelsAujourdhui = data.filter(r =>
+        r.status === 'actif' &&
+new Date(r.dateRappel).toDateString() <= today.toDateString()
+      );
+
+      console.log('📢 Rappels à afficher aujourd’hui:', rappelsAujourdhui);
+
+      if (rappelsAujourdhui.length > 0) {
+        setRappelModal(rappelsAujourdhui[0]);
+        setEditDate(rappelsAujourdhui[0].dateRappel?.split('T')[0] || '');
+        setEditNote(rappelsAujourdhui[0].note || '');
+      }
+
+    } catch (err) {
+      console.error('❌ Erreur rappels:', err.message);
+    }
+  };
+
+  fetchRappels();
+}, []);
+
+const handleUpdateRappel = async (id) => {
+  const res = await fetch(`http://localhost:5000/api/rappels/${id}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ dateRappel: editDate, note: editNote })
+  });
+
+  const updated = await res.json();
+  setRappelModal(null);
+  alert("تم التحديث بنجاح");
+};
+
+const handleDeleteRappel = async (id) => {
+  const res = await fetch(`http://localhost:5000/api/rappels/${id}`, {
+    method: 'DELETE'
+  });
+
+  if (res.ok) {
+    setRappelModal(null);
+    alert("تم الحذف بنجاح");
+  }
+};
 
   const fetchDashboardData = async () => {
     try {
@@ -299,6 +362,18 @@ const AdminDashboard = () => {
       {/* Header */}
       <Sidebar onLogout={handleLogout} />
       <Header />
+{rappelModal && (
+  <RappelModal
+    rappel={rappelModal}
+    onClose={() => setRappelModal(null)}
+    onUpdate={() => handleUpdateRappel(rappelModal._id)}
+    onDelete={() => handleDeleteRappel(rappelModal._id)}
+    editDate={editDate}
+    setEditDate={setEditDate}
+    editNote={editNote}
+    setEditNote={setEditNote}
+  />
+)}
 
       <div className="dashboard-container">
         <div className="dashboard-content">

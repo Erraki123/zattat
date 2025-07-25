@@ -373,13 +373,35 @@ const EtudiantPresencesAbsences = () => {
                       </span>
                     </div>
                   </div>
-                  
+                  {/* remarque */}
                   {item.remarque && (
                     <div style={styles.remarqueInfo}>
                       <MessageCircle size={18} color="#6b7280" />
                       <div style={styles.remarqueDetails}>
                         <span style={styles.remarqueLabel}>Remarque</span>
                         <span style={styles.remarqueValue}>{item.remarque}</span>
+                      </div>
+                    </div>
+                  )}
+                  {/* matiere */}
+                  {item.matiere && (
+                    <div style={styles.remarqueInfo}>
+                      <BookOpen size={18} color="#6b7280" />
+                      <div style={styles.remarqueDetails}>
+                        <span style={styles.remarqueLabel}>Matière</span>
+                        <span style={styles.remarqueValue}>{item.matiere}</span>
+                      </div>
+                    </div>
+                  )}
+                  {/* période */}
+                  {item.periode && (
+                    <div style={styles.remarqueInfo}>
+                      <Clock size={18} color="#6b7280" />
+                      <div style={styles.remarqueDetails}>
+                        <span style={styles.remarqueLabel}>Période</span>
+                        <span style={styles.remarqueValue}>
+                          {item.periode === 'matin' ? 'Matin' : item.periode === 'soir' ? 'Soir' : item.periode}
+                        </span>
                       </div>
                     </div>
                   )}

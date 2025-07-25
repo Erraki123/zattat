@@ -588,7 +588,7 @@ const handleLogin = async () => {
               <div className="brand-icon">
                 <GraduationCap size={40} />
               </div>
-              <h1 className="brand-title"> Zettat</h1>
+              <h1 className="brand-title"> Alfred Kastler</h1>
               <p className="brand-subtitle">
                 Système de Gestion des Élèves & Paiements
               </p>

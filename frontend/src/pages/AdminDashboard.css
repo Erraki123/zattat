@@ -73,6 +73,28 @@ body {
   background-color: #f8fafc;
   background-attachment: fixed;
 }
+.modal-backdrop {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0,0,0,0.4);
+  display: flex; align-items: center; justify-content: center;
+  z-index: 999;
+}
+
+.modal {
+  background: white;
+  padding: 24px;
+  border-radius: 10px;
+  max-width: 500px;
+  width: 100%;
+}
+
+.reminder-card {
+  background: #fef9c3;
+  padding: 12px;
+  border-radius: 8px;
+  margin-bottom: 10px;
+}
 
 
 .admin-dashboard::before {

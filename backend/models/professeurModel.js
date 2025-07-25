@@ -6,6 +6,7 @@ const professeurSchema = new mongoose.Schema({
     type: String,
     required: true
   },
+  
     genre: {
     type: String,
     enum: ['Homme', 'Femme'],
@@ -40,6 +41,11 @@ const professeurSchema = new mongoose.Schema({
     type: [String], // Liste des noms des cours
     default: []
   },
+  matiere: {
+  type: String,
+  required: true // أو false إذا أردت تركه اختياري
+},
+
   lastSeen: {
   type: Date,
   default: null

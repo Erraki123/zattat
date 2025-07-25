@@ -9,6 +9,7 @@ const Etudiant = require('./models/etudiantModel');
 const multer = require('multer');
 const path = require('path');
 const uploadMessageFile = require('./middlewares/uploadMessageFile');
+const Rappel = require('./models/RappelPaiement');
 
 const Cours = require('./models/coursModel');
 const Paiement = require('./models/paiementModel'); // تأكد أنك قمت بإنشاء الملف
@@ -324,9 +325,10 @@ app.post('/api/cours', authAdmin, async (req, res) => {
     let { nom, professeur } = req.body;
 
     // ✅ تحويل professeur إلى مصفوفة إذا لم يكن مصفوفة
-    if (!Array.isArray(professeur)) {
-      professeur = [professeur];
-    }
+  if (!Array.isArray(professeur)) {
+  professeur = professeur ? [professeur] : [];
+}
+
 
     // التحقق من عدم تكرار الكورس
     const existe = await Cours.findOne({ nom });
@@ -583,29 +585,36 @@ app.get('/api/professeur/mes-cours', authProfesseur, async (req, res) => {
 
 app.post('/api/presences', authProfesseur, async (req, res) => {
   try {
-    const { etudiant, cours, dateSession, present, remarque } = req.body;
+    const { etudiant, cours, dateSession, present, remarque, heure, periode } = req.body;
 
-    // تحقق أن الطالب يدرس عند هذا الأستاذ
+    // ✅ تحقق أن هذا الأستاذ يدرّس هذا الكورس
     const prof = await Professeur.findById(req.professeurId);
     if (!prof.cours.includes(cours)) {
       return res.status(403).json({ message: '❌ Vous ne pouvez pas marquer la présence pour ce cours.' });
     }
 
+    // ✅ إنشاء كائن présence جديد مع الوقت والفترة
     const presence = new Presence({
       etudiant,
       cours,
       dateSession: new Date(dateSession),
       present,
       remarque,
-      creePar: req.professeurId
+      heure,    // 🆕 وقت الحضور بصيغة "08:30"
+      periode,  // 🆕 'matin' أو 'soir'
+      creePar: req.professeurId,
+         matiere: prof.matiere,           // ✅ المادة تلقائياً من حساب الأستاذ
+      nomProfesseur: prof.nom   
     });
 
     await presence.save();
     res.status(201).json(presence);
+
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
+
 
 // Ajoutez ces routes à votre app.js après les routes existantes
 
@@ -1003,45 +1012,67 @@ app.get('/api/professeur/documents', authProfesseur, async (req, res) => {
 });
 
 
+
+// ✅ BACKEND: Retourne les cours de l'étudiant + leurs professeurs
+app.get('/api/etudiant/mes-cours', authEtudiant, async (req, res) => {
+  try {
+    const etudiant = await Etudiant.findById(req.etudiantId);
+    if (!etudiant) {
+      return res.status(404).json({ message: 'Étudiant non trouvé' });
+    }
+
+    const coursAvecProfs = await Promise.all(
+      etudiant.cours.map(async (nomCours) => {
+        const professeurs = await Professeur.find({ cours: nomCours })
+          .select('_id nom matiere');
+        return { nomCours, professeurs };
+      })
+    );
+
+    res.status(200).json(coursAvecProfs);
+  } catch (err) {
+    res.status(500).json({ message: 'Erreur serveur', error: err.message });
+  }
+});
+// ✅ BACKEND: Envoi d'un exercice à un prof spécifique
 app.post(
   '/api/etudiant/exercices',
   authEtudiant,
   exerciceUpload.single('fichier'),
   async (req, res) => {
     try {
-      const { titre, cours, type, numero } = req.body;
+      const { titre, cours, type, numero, professeurId } = req.body;
 
-      // التحقق من تكرار إرسال التمرين اليوم نفسه
-      const existe = await Exercice.findOne({
-        etudiant: req.etudiantId,
-        cours,
-        type,
-        numero,
-        dateEnvoi: {
-          $gte: new Date(new Date().setHours(0, 0, 0, 0)),
-          $lte: new Date(new Date().setHours(23, 59, 59, 999))
-        }
-      });
+      // ✅ التحقق من الحقول المطلوبة
+      if (!titre || !cours || !type || !numero || !professeurId || !req.file) {
+        return res.status(400).json({ message: 'Tous les champs sont requis.' });
+      }
 
-      if (existe) {
+      // ✅ التأكد أن الأستاذ يدرّس هذا الكورس
+      const professeur = await Professeur.findById(professeurId);
+      if (!professeur || !professeur.cours.includes(cours)) {
         return res.status(400).json({
-          message: '🛑 لقد قمت بإرسال هذا التمرين اليوم مسبقًا.'
+          message: '❌ Le professeur sélectionné n\'enseigne pas ce cours.'
         });
       }
 
+      // ✅ إنشاء التمرين
       const fichier = `/uploads/${req.file.filename}`;
-
       const exercice = new Exercice({
         titre,
         cours,
         type,
         numero,
         fichier,
-        etudiant: req.etudiantId
+        etudiant: req.etudiantId,
+        professeur: professeurId
       });
 
       await exercice.save();
-      res.status(201).json({ message: '✅ Exercice envoyé avec succès', exercice });
+      res.status(201).json({
+        message: '✅ Exercice envoyé avec succès',
+        exercice
+      });
     } catch (err) {
       console.error('❌ Erreur envoi exercice:', err);
       res.status(500).json({
@@ -1052,19 +1083,6 @@ app.post(
   }
 );
 
-
-app.get('/api/etudiant/mes-cours', authEtudiant, async (req, res) => {
-  try {
-    const etudiant = await Etudiant.findById(req.etudiantId); // ❌ لا داعي لـ populate
-    if (!etudiant) {
-      return res.status(404).json({ message: 'Étudiant non trouvé' });
-    }
-
-    res.json(etudiant.cours); // 🔥 يرجع مصفوفة: ["Math", "Français", "Physique"]
-  } catch (err) {
-    res.status(500).json({ message: 'Erreur serveur', error: err.message });
-  }
-});
 
 // DELETE - Supprimer un exercice (par l'étudiant sous 24h)
 app.delete('/api/etudiant/exercices/:id', authEtudiant, async (req, res) => {
@@ -1402,21 +1420,32 @@ app.get('/api/notifications', authAdmin, async (req, res) => {
 app.get('/api/professeur/exercices/:cours', authProfesseur, async (req, res) => {
   try {
     const { cours } = req.params;
-    const exercices = await Exercice.find({ cours }).populate('etudiant', 'nomComplet email');
+
+    // ✅ جلب التمارين فقط التي أُرسلت لهذا الأستاذ
+    const exercices = await Exercice.find({ 
+      cours, 
+      professeur: req.professeurId // ✅ هذا هو الفرق
+    }).populate('etudiant', 'nomComplet email');
+
     res.json(exercices);
   } catch (err) {
     res.status(500).json({ message: 'Erreur serveur', error: err.message });
   }
 });
+
 // ✅ Route GET – Etudiant voir ses propres exercices
 app.get('/api/etudiant/mes-exercices', authEtudiant, async (req, res) => {
   try {
-    const exercices = await Exercice.find({ etudiant: req.etudiantId }).sort({ dateUpload: -1 });
+    const exercices = await Exercice.find({ etudiant: req.etudiantId })
+      .populate('professeur', 'nom matiere') // ✅ إظهار اسم ومادة الأستاذ
+      .sort({ dateUpload: -1 });
+
     res.json(exercices);
   } catch (error) {
     res.status(500).json({ message: 'Erreur serveur', error: error.message });
   }
 });
+
 
 // 🔒 PUT /api/professeur/exercices/:id/remarque
 app.put('/api/professeur/exercices/:id/remarque', authProfesseur, async (req, res) => {
@@ -1555,39 +1584,46 @@ app.get('/api/notifications/deleted', authAdmin, (req, res) => {
 // accessible uniquement par Admin
 app.post('/api/professeurs', authAdmin, upload.single('image'), async (req, res) => {
   try {
-    const { nom, email, motDePasse, cours, telephone, dateNaissance, actif, genre } = req.body;
+    const { nom, email, motDePasse, cours, telephone, dateNaissance, actif, genre, matiere } = req.body;
 
-    // التحقق من التكرار
+    // 🔐 تحقق من التكرار
     const existe = await Professeur.findOne({ email });
     if (existe) return res.status(400).json({ message: '📧 هذا البريد مستخدم من قبل' });
 
-    // التحقق من قيمة النوع (genre)
+    // ✅ تحقق من genre صالح
     if (!['Homme', 'Femme'].includes(genre)) {
       return res.status(400).json({ message: '🚫 النوع (genre) غير صالح. يجب أن يكون Homme أو Femme' });
     }
 
-    // معالجة الصورة
+    // ✅ تحقق من المادة (matiere)
+    if (!matiere || matiere.trim() === '') {
+      return res.status(400).json({ message: '🚫 المادة (matière) مطلوبة' });
+    }
+
+    // 🖼️ مسار الصورة
     const imagePath = req.file ? `/uploads/${req.file.filename}` : '';
 
-    // تحويل التاريخ
+    // 🗓️ تحويل التاريخ
     const date = dateNaissance ? new Date(dateNaissance) : null;
 
-    // تحويل actif إلى Boolean
+    // 🔁 actif إلى Boolean
     const actifBool = actif === 'true' || actif === true;
 
-    // تشفير كلمة السر
+    // 🔐 تشفير كلمة السر
     const hashed = await bcrypt.hash(motDePasse, 10);
 
+    // 🆕 إنشاء الأستاذ
     const professeur = new Professeur({
       nom,
-      genre, // ✅ تمت الإضافة هنا
+      genre,
       email,
       motDePasse: hashed,
       telephone,
       dateNaissance: date,
       image: imagePath,
       actif: actifBool,
-      cours // يتم تحديده من قبل l'admin
+      cours,
+      matiere // ✅ الإضافة هنا
     });
 
     await professeur.save();
@@ -1630,26 +1666,28 @@ app.put('/api/professeurs/:id', authAdmin, upload.single('image'), async (req, r
       telephone,
       email,
       motDePasse,
-      actif
+      actif,
+      matiere // ✅ nouvelle propriété
     } = req.body;
 
     let cours = req.body.cours;
 
-    // 🧠 Assurez-vous que cours est un tableau
+    // 🧠 S'assurer que cours est un tableau
     if (!cours) cours = [];
     if (typeof cours === 'string') cours = [cours];
 
-    // 🔍 Récupérer l'ancien professeur pour détecter les cours supprimés
+    // 🔍 Récupérer les anciens cours du professeur
     const ancienProf = await Professeur.findById(professeurId);
     if (!ancienProf) return res.status(404).json({ message: "Professeur introuvable" });
 
     const ancienCours = ancienProf.cours || [];
 
-    // 🔁 Trouver les cours supprimés
+    // ➖ Cours supprimés
     const coursSupprimes = ancienCours.filter(c => !cours.includes(c));
+    // ➕ Cours ajoutés
     const coursAjoutes = cours.filter(c => !ancienCours.includes(c));
 
-    // 🔁 Supprimer ce professeur des anciens cours
+    // 🧼 Retirer le prof des cours supprimés
     for (const coursNom of coursSupprimes) {
       await Cours.updateOne(
         { nom: coursNom },
@@ -1657,7 +1695,7 @@ app.put('/api/professeurs/:id', authAdmin, upload.single('image'), async (req, r
       );
     }
 
-    // 🔁 Ajouter ce professeur aux nouveaux cours
+    // 🧩 Ajouter le prof dans les cours ajoutés
     for (const coursNom of coursAjoutes) {
       await Cours.updateOne(
         { nom: coursNom },
@@ -1665,7 +1703,7 @@ app.put('/api/professeurs/:id', authAdmin, upload.single('image'), async (req, r
       );
     }
 
-    // 📦 Préparer les données à mettre à jour
+    // 🛠️ Données à mettre à jour
     const updateData = {
       nom,
       genre,
@@ -1673,18 +1711,21 @@ app.put('/api/professeurs/:id', authAdmin, upload.single('image'), async (req, r
       telephone,
       email,
       cours,
+      matiere, // ✅ ajout ici
       actif: actif === 'true' || actif === true
     };
 
+    // 📷 Gestion de l'image
     if (req.file) {
       updateData.image = `/uploads/${req.file.filename}`;
     }
 
+    // 🔐 Mot de passe s'il est modifié
     if (motDePasse && motDePasse.trim() !== '') {
       updateData.motDePasse = await bcrypt.hash(motDePasse, 10);
     }
 
-    // ✅ Mettre à jour le professeur
+    // ✅ Mise à jour du professeur
     const updatedProf = await Professeur.findByIdAndUpdate(
       professeurId,
       updateData,
@@ -1698,6 +1739,7 @@ app.put('/api/professeurs/:id', authAdmin, upload.single('image'), async (req, r
     res.status(500).json({ message: "Erreur lors de la modification", error: err.message });
   }
 });
+
 
 // routes/professeurs.js
 app.patch('/api/professeurs/:id/actif', authAdmin, async (req, res) => {
@@ -1986,7 +2028,7 @@ app.get('/api/paiements', authAdmin, async (req, res) => {
 app.get('/api/paiements/exp', authAdmin, async (req, res) => {
   try {
     const paiements = await Paiement.find()
-      .populate('etudiant', 'nomComplet actif')
+      .populate('etudiant', ' image nomComplet actif')
       .sort({ moisDebut: -1 }); // الأحدث أولاً
 
     const aujourdHui = new Date();
@@ -2141,6 +2183,56 @@ app.get('/api/messages/unread-by-sender', async (req, res) => {
     res.json(unreadCounts);
   } catch (err) {
     res.status(500).json({ message: 'Erreur serveur', error: err.message });
+  }
+});
+app.put('/api/rappels/:id', async (req, res) => {
+  try {
+    const { dateRappel, note } = req.body;
+    const updated = await Rappel.findByIdAndUpdate(
+      req.params.id,
+      { dateRappel, note },
+      { new: true }
+    );
+    res.json(updated);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/rappels', async (req, res) => {
+  try {
+    console.log('📥 Body reçu:', req.body); // <= هذا مهم
+    const { etudiant, cours, montantRestant, note, dateRappel } = req.body;
+
+    if (!etudiant || !cours || !montantRestant || !dateRappel) {
+      return res.status(400).json({ message: 'Champs manquants' });
+    }
+
+    const rappel = new Rappel({ etudiant, cours, montantRestant, note, dateRappel });
+    await rappel.save();
+    res.status(201).json(rappel);
+  } catch (err) {
+    console.error('❌ Erreur POST /rappels:', err);
+    res.status(500).json({ message: 'Erreur serveur', error: err.message });
+  }
+});
+
+app.get('/api/rappels', async (req, res) => {
+  try {
+    const rappels = await Rappel.find({ status: 'actif' })
+      .populate('etudiant', 'nomComplet'); // نجلب فقط الاسم الكامل
+
+    res.json(rappels); // نرسلها للـ frontend
+  } catch (err) {
+    res.status(500).json({ message: 'Erreur serveur', error: err.message });
+  }
+});
+app.delete('/api/rappels/:id', async (req, res) => {
+  try {
+    await Rappel.findByIdAndDelete(req.params.id);
+    res.json({ message: 'Rappel supprimé' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
 });
 

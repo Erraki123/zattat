@@ -1376,7 +1376,28 @@ subtitle: {
                   <X size={20} />
                 </button>
               </div>
-              
+              {/* ✅ زر فتح صفحة paiements-exp */}
+              <div style={{ padding: '0 24px 16px 24px', textAlign: 'right' }}>
+                <button
+                  onClick={() => window.location.href = '/paiements-exp'}
+                  style={{
+                    background: 'linear-gradient(to right, #ef4444, #f97316)',
+                    border: 'none',
+                    borderRadius: '8px',
+                    padding: '8px 16px',
+                    color: 'white',
+                    fontWeight: '500',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    float: 'right'
+                  }}
+                >
+                  <AlertTriangle size={18} />
+                  Voir tous
+                </button>
+              </div>
               <div style={styles.modalBody}>
                 {expirés.length === 0 ? (
                   <div style={styles.modalEmpty}>

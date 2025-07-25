@@ -26,10 +26,16 @@ const AjouterPaiement = () => {
     moisDebut: '',
     nombreMois: 1,
     montant: '',
-    note: ''
+    note: '',
+    typePaiement: 'mensuel' // 'annuel' ou 'mensuel'
   });
 
   const [message, setMessage] = useState('');
+
+  // 🎯 Étape 1 : Déclare les états nécessaires
+  const [showRappelModal, setShowRappelModal] = useState(false);
+  const [note, setNote] = useState('');
+  const [dateRappel, setDateRappel] = useState('');
 
   useEffect(() => {
     const fetchData = async () => {
@@ -120,6 +126,66 @@ const AjouterPaiement = () => {
       setMessage('❌ Erreur lors de l\'ajout du paiement');
     }
   };
+
+  // Fonction pour enregistrer le rappel
+  const handleAjouterRappel = async () => {
+    if (!dateRappel || !note) {
+      alert("Veuillez remplir tous les champs !");
+      return;
+    }
+
+    // ✅ تحقق من بيانات الدفع أولاً
+    if (!form.etudiant || !form.montant || !form.cours || form.cours.length === 0) {
+      alert("Veuillez remplir le paiement d'abord (étudiant, montant, cours).");
+      return;
+    }
+
+    const etudiantId = form.etudiant;
+    const nomCours = Array.isArray(form.cours) ? form.cours[0] : form.cours;
+    const montantManquant = form.montant;
+
+    const data = {
+      etudiant: etudiantId,
+      cours: nomCours,
+      montantRestant: montantManquant,
+      note,
+      dateRappel
+    };
+
+    try {
+      const res = await fetch('http://localhost:5000/api/rappels', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+      });
+
+      if (res.ok) {
+        alert("Rappel enregistré avec succès !");
+        setShowRappelModal(false);
+        setNote('');
+        setDateRappel('');
+      } else {
+        alert("Erreur lors de l'enregistrement !");
+      }
+    } catch (err) {
+      console.error(err);
+      alert("Erreur serveur !");
+    }
+  };
+
+  useEffect(() => {
+    if (form.typePaiement === 'annuel') {
+      setForm(prev => ({ ...prev, nombreMois: 12 }));
+    }
+  }, [form.typePaiement]);
+
+  // (Optionnel) Calcul automatique du montant pour l’année
+  // useEffect(() => {
+  //   if (form.typePaiement === 'annuel') {
+  //     const montantMensuel = form.montant / (form.nombreMois || 1);
+  //     setForm(prev => ({ ...prev, montant: montantMensuel * 12 }));
+  //   }
+  // }, [form.nombreMois]);
 
   const styles = {
     container: {
@@ -291,6 +357,21 @@ const AjouterPaiement = () => {
           <h2 style={styles.title} className="title">Ajouter un Paiement</h2>
 
           <div style={styles.formGrid}>
+            {/* Type de paiement */}
+            <div style={styles.formGroup}>
+              <label style={styles.label}>
+                Type de paiement
+              </label>
+              <select
+                name="typePaiement"
+                value={form.typePaiement}
+                onChange={handleChange}
+                style={styles.input}
+              >
+                <option value="mensuel">Paiement mensuel</option>
+                <option value="annuel">Paiement annuel (12 mois)</option>
+              </select>
+            </div>
             {/* Première ligne - Étudiant et Cours */}
             <div style={styles.formRow} className="form-row">
               <div style={styles.formGroup}>
@@ -424,6 +505,23 @@ const AjouterPaiement = () => {
                 <Save size={18} />
                 Enregistrer le Paiement
               </button>
+              {/* 🎯 Étape 2 : Bouton qui ouvre le modal */}
+              <button
+                onClick={() => setShowRappelModal(true)}
+                style={{
+                  background: '#3b82f6',
+                  color: 'white',
+                  padding: '10px 20px',
+                  borderRadius: '8px',
+                  border: 'none',
+                  marginLeft: '16px',
+                  fontWeight: '500',
+                  fontSize: '16px',
+                  cursor: 'pointer'
+                }}
+              >
+                Ajouter un rappel
+              </button>
             </div>
           </div>
 
@@ -431,6 +529,57 @@ const AjouterPaiement = () => {
           {message && (
             <div style={message.includes('❌') ? {...styles.message, ...styles.messageError} : styles.message}>
               {message}
+            </div>
+          )}
+
+          {/* 🎯 Étape 3 : Composant du Modal */}
+          {showRappelModal && (
+            <div style={{
+              position: 'fixed',
+              top: 0, left: 0, right: 0, bottom: 0,
+              backgroundColor: 'rgba(0,0,0,0.5)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              zIndex: 1000
+            }}>
+              <div style={{
+                background: 'white',
+                padding: '30px',
+                borderRadius: '12px',
+                width: '90%',
+                maxWidth: '500px',
+                boxShadow: '0 10px 25px rgba(0,0,0,0.2)',
+                position: 'relative'
+              }}>
+                <h2 style={{ marginBottom: '20px', fontSize: '20px' }}>Ajouter un rappel de paiement</h2>
+
+                <label style={{ display: 'block', marginBottom: '8px' }}>Description :</label>
+                <textarea
+                  value={note}
+                  onChange={(e) => setNote(e.target.value)}
+                  placeholder="Entrez une note..."
+                  rows="4"
+                  style={{ width: '100%', padding: '10px', marginBottom: '16px', borderRadius: '8px', border: '1px solid #ccc' }}
+                />
+
+                <label style={{ display: 'block', marginBottom: '8px' }}>Date du rappel :</label>
+                <input
+                  type="date"
+                  value={dateRappel}
+                  onChange={(e) => setDateRappel(e.target.value)}
+                  style={{ width: '100%', padding: '10px', marginBottom: '24px', borderRadius: '8px', border: '1px solid #ccc' }}
+                />
+
+                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
+                  <button onClick={() => setShowRappelModal(false)} style={{ padding: '10px 16px', background: '#e5e7eb', border: 'none', borderRadius: '6px' }}>
+                    Annuler
+                  </button>
+                  <button onClick={handleAjouterRappel} style={{ padding: '10px 16px', background: '#059669', color: 'white', border: 'none', borderRadius: '6px' }}>
+                    Enregistrer
+                  </button>
+                </div>
+              </div>
             </div>
           )}
         </div>

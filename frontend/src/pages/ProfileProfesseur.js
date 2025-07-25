@@ -30,7 +30,7 @@ const ProfileProfesseur = () => {
     const token = localStorage.getItem('token');
 
       if (!token || role !== 'prof') {
-      navigate('/'); // redirection vers la page d’accueil
+      navigate('/'); // redirection vers la page d'accueil
       return;
     }
 
@@ -125,6 +125,9 @@ const ProfileProfesseur = () => {
             <div style={styles.profileInfo}>
               <h2 style={styles.profileName}>{professeur.nom}</h2>
               <p style={styles.profileEmail}>{professeur.email}</p>
+              {professeur.matiere && (
+                <p style={styles.profileMatiere}>Professeur de {professeur.matiere}</p>
+              )}
               <div style={styles.statusContainer}>
                 <span style={{
                   ...styles.statusText,
@@ -146,6 +149,15 @@ const ProfileProfesseur = () => {
               <h3 style={styles.cardTitle}>Informations Personnelles</h3>
             </div>
             <div style={styles.cardContent}>
+              {professeur.matiere && (
+                <div style={styles.infoItem}>
+                  <Award size={18} color="#6b7280" />
+                  <div style={styles.infoDetails}>
+                    <span style={styles.infoLabel}>Matière enseignée</span>
+                    <span style={styles.infoValue}>{professeur.matiere}</span>
+                  </div>
+                </div>
+              )}
               <div style={styles.infoItem}>
                 <Phone size={18} color="#6b7280" />
                 <div style={styles.infoDetails}>
@@ -312,7 +324,15 @@ const styles = {
   profileEmail: {
     fontSize: '1rem',
     color: '#6b7280',
+    margin: '0 0 0.25rem 0',
+  },
+  
+  profileMatiere: {
+    fontSize: '0.875rem',
+    color: '#4f46e5',
+    fontWeight: '500',
     margin: '0 0 0.5rem 0',
+    fontStyle: 'italic',
   },
   
   statusContainer: {

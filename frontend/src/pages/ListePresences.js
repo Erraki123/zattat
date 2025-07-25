@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Calendar, Book, Eye, X, Users, Check, AlertCircle, FileText, Search, Filter, ChevronDown } from 'lucide-react';
+import { Calendar, Book, Eye, X, Users, Check, AlertCircle, FileText, Search, Filter, ChevronDown, User, Clock } from 'lucide-react';
 import axios from 'axios';
 import Sidebar from '../components/Sidebar'; // ✅ استيراد صحيح
 
@@ -9,7 +9,10 @@ const ListePresences = () => {
   const [filteredSessions, setFilteredSessions] = useState([]);
   const [sessionActive, setSessionActive] = useState(null);
   const [loading, setLoading] = useState(true);
-  
+  const [moisScolaireFilter, setMoisScolaireFilter] = useState('');
+const [dateFrom, setDateFrom] = useState('');
+const [dateTo, setDateTo] = useState('');
+
   // États pour les filtres
   const [searchTerm, setSearchTerm] = useState('');
   const [dateFilter, setDateFilter] = useState('');
@@ -17,6 +20,12 @@ const ListePresences = () => {
   const [presenceRateFilter, setPresenceRateFilter] = useState('');
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
   const [availableCours, setAvailableCours] = useState([]);
+  const [matiereFilter, setMatiereFilter] = useState(''); // 🆕 Nouveau filtre
+  const [periodeFilter, setPeriodeFilter] = useState(''); // 🆕 Nouveau filtre
+  const [availableMatieres, setAvailableMatieres] = useState([]); // 🆕
+  const [availablePeriodes, setAvailablePeriodes] = useState([]); // 🆕
+  const [professeurFilter, setProfesseurFilter] = useState(''); // 🆕 Nouveau filtre
+  const [availableProfesseurs, setAvailableProfesseurs] = useState([]); // 🆕
 
   useEffect(() => {
     const fetchPresences = async () => {
@@ -29,22 +38,24 @@ const ListePresences = () => {
 
         const data = res.data;
 
-        // Groupement par date + cours
+        // Groupement par date + cours + matiere + nomProfesseur
         const grouped = {};
         for (let p of data) {
-          const key = `${new Date(p.dateSession).toDateString()}_${p.cours}`;
+          const key = `${new Date(p.dateSession).toDateString()}_${p.cours}_${p.matiere || ''}_${p.nomProfesseur || ''}`;
           if (!grouped[key]) grouped[key] = [];
           grouped[key].push(p);
         }
 
         // Conversion en array avec statistiques
         const sessions = Object.entries(grouped).map(([key, values]) => {
-          const [date, cours] = key.split('_');
+          const [date, cours, matiere, nomProfesseur] = key.split('_');
           const presentCount = values.filter(p => p.present).length;
           const totalCount = values.length;
           return { 
             date, 
             cours, 
+            matiere,
+            nomProfesseur,
             presences: values,
             presentCount,
             totalCount,
@@ -52,9 +63,16 @@ const ListePresences = () => {
           };
         });
 
-        // Extraire les cours uniques pour le filtre
+        // Extraire les cours, matières, périodes et professeurs uniques pour les filtres
         const uniqueCours = [...new Set(sessions.map(s => s.cours))];
+        const uniqueMatieres = [...new Set(data.filter(p => p.matiere).map(p => p.matiere))];
+        const uniquePeriodes = [...new Set(data.filter(p => p.periode).map(p => p.periode))];
+        const uniqueProfesseurs = [...new Set(data.filter(p => p.nomProfesseur).map(p => p.nomProfesseur))];
+
         setAvailableCours(uniqueCours);
+        setAvailableMatieres(uniqueMatieres);
+        setAvailablePeriodes(uniquePeriodes);
+        setAvailableProfesseurs(uniqueProfesseurs);
 
         setGroupedSessions(sessions);
         setFilteredSessions(sessions);
@@ -79,6 +97,25 @@ const ListePresences = () => {
         formatDate(session.date).toLowerCase().includes(searchTerm.toLowerCase())
       );
     }
+if (moisScolaireFilter) {
+  filtered = filtered.filter(session => {
+    const sessionDate = new Date(session.date);
+    const [filterYear, filterMonth] = moisScolaireFilter.split('-');
+    return (
+      sessionDate.getFullYear() === parseInt(filterYear) &&
+      sessionDate.getMonth() + 1 === parseInt(filterMonth)
+    );
+  });
+}
+if (dateFrom) {
+  const from = new Date(dateFrom);
+  filtered = filtered.filter(session => new Date(session.date) >= from);
+}
+
+if (dateTo) {
+  const to = new Date(dateTo);
+  filtered = filtered.filter(session => new Date(session.date) <= to);
+}
 
     // Filtre par date
     if (dateFilter) {
@@ -107,21 +144,77 @@ const ListePresences = () => {
       });
     }
 
-    setFilteredSessions(filtered);
-  }, [searchTerm, dateFilter, coursFilter, presenceRateFilter, groupedSessions]);
+    // Filtre par matière
+    if (matiereFilter && matiereFilter !== 'all') {
+      filtered = filtered.filter(session => 
+        session.presences.some(p => p.matiere === matiereFilter)
+      );
+    }
 
+    // Filtre par période
+    if (periodeFilter && periodeFilter !== 'all') {
+      filtered = filtered.filter(session => 
+        session.presences.some(p => p.periode === periodeFilter)
+      );
+    }
+
+    // Filtre par professeur
+    if (professeurFilter && professeurFilter !== 'all') {
+      filtered = filtered.filter(session => 
+        session.presences.some(p => p.nomProfesseur === professeurFilter)
+      );
+    }
+
+    setFilteredSessions(filtered);
+  }, [
+  searchTerm,
+  dateFilter,
+  coursFilter,
+  presenceRateFilter,
+  matiereFilter,
+  periodeFilter,
+  professeurFilter,
+  moisScolaireFilter, // ✅ ضروري لتفعيل التصفية عند تغييره
+  dateFrom,            // ✅ مهم
+  dateTo,              // ✅ مهم
+  groupedSessions
+]);
   const formatDate = (d) => new Date(d).toLocaleDateString('fr-FR');
   const handleLogout = () => {
     localStorage.removeItem('token');
     window.location.href = '/';
   };
 
-  const clearFilters = () => {
-    setSearchTerm('');
-    setDateFilter('');
-    setCoursFilter('');
-    setPresenceRateFilter('');
-  };
+ const clearFilters = () => {
+  setSearchTerm('');
+  setDateFilter('');
+  setCoursFilter('');
+  setPresenceRateFilter('');
+  setMatiereFilter('');
+  setPeriodeFilter('');
+  setProfesseurFilter('');
+  setMoisScolaireFilter('');
+  setDateFrom('');
+  setDateTo('');
+};
+
+const getMoisOptions = () => {
+  const options = [];
+  const today = new Date();
+  const currentYear = today.getFullYear();
+
+  // نولد الشهور من أغسطس العام الماضي إلى يوليو العام القادم
+  for (let y = currentYear - 1; y <= currentYear + 1; y++) {
+    for (let m = 0; m < 12; m++) {
+      const date = new Date(y, m);
+      const label = date.toLocaleString('fr-FR', { month: 'long', year: 'numeric' });
+      const value = `${y}-${String(m + 1).padStart(2, '0')}`;
+      options.push({ value, label });
+    }
+  }
+
+  return options;
+};
 
   const styles = {
     container: {
@@ -509,7 +602,8 @@ const ListePresences = () => {
             <Sidebar onLogout={handleLogout} />
         
         {/* Header */}
-        <div style={styles.card}>
+      
+<div style={styles.card}>
           <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', width: '100%', gap: '12px', textAlign: 'center' }}>
             <div style={styles.iconContainer}>
             </div>
@@ -551,7 +645,7 @@ const ListePresences = () => {
                 />
               </button>
               
-              {(searchTerm || dateFilter || coursFilter || presenceRateFilter) && (
+              {(searchTerm || dateFilter || coursFilter || presenceRateFilter || moisScolaireFilter || dateFrom || dateTo || matiereFilter || periodeFilter || professeurFilter) && (
                 <button
                   onClick={clearFilters}
                   style={styles.clearButton}
@@ -566,6 +660,43 @@ const ListePresences = () => {
             {showAdvancedFilters && (
               <div style={styles.advancedFilters}>
                 <div style={styles.filtersGrid} className="filters-grid">
+                  <div style={styles.filterGroup}>
+                    <label style={styles.filterLabel}>📅 Mois scolaire</label>
+                    <select
+                      value={moisScolaireFilter}
+                      onChange={(e) => setMoisScolaireFilter(e.target.value)}
+                      style={styles.filterSelect}
+                      className="filter-select"
+                    >
+                      <option value="">Tous les mois</option>
+                      {getMoisOptions().map((option) => (
+                        <option key={option.value} value={option.value}>{option.label}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div style={styles.filterGroup}>
+                    <label style={styles.filterLabel}>📅 Date de début</label>
+                    <input
+                      type="date"
+                      value={dateFrom}
+                      onChange={(e) => setDateFrom(e.target.value)}
+                      style={styles.filterInput}
+                      className="filter-input"
+                    />
+                  </div>
+
+                  <div style={styles.filterGroup}>
+                    <label style={styles.filterLabel}>📅 Date de fin</label>
+                    <input
+                      type="date"
+                      value={dateTo}
+                      onChange={(e) => setDateTo(e.target.value)}
+                      style={styles.filterInput}
+                      className="filter-input"
+                    />
+                  </div>
+                  
                   <div style={styles.filterGroup}>
                     <label style={styles.filterLabel}>Date</label>
                     <input
@@ -606,6 +737,53 @@ const ListePresences = () => {
                       <option value="low">Faible (&lt;50%)</option>
                     </select>
                   </div>
+
+                  <div style={styles.filterGroup}>
+                    <label style={styles.filterLabel}>Matière</label>
+                    <select
+                      value={matiereFilter}
+                      onChange={(e) => setMatiereFilter(e.target.value)}
+                      style={styles.filterSelect}
+                      className="filter-select"
+                    >
+                      <option value="">Toutes les matières</option>
+                      {availableMatieres.map(matiere => (
+                        <option key={matiere} value={matiere}>{matiere}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div style={styles.filterGroup}>
+                    <label style={styles.filterLabel}>Période</label>
+                    <select
+                      value={periodeFilter}
+                      onChange={(e) => setPeriodeFilter(e.target.value)}
+                      style={styles.filterSelect}
+                      className="filter-select"
+                    >
+                      <option value="">Toutes les périodes</option>
+                      {availablePeriodes.map(periode => (
+                        <option key={periode} value={periode}>
+                          {periode === 'matin' ? 'Matin' : periode === 'soir' ? 'Soir' : periode}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div style={styles.filterGroup}>
+                    <label style={styles.filterLabel}>Professeur</label>
+                    <select
+                      value={professeurFilter}
+                      onChange={(e) => setProfesseurFilter(e.target.value)}
+                      style={styles.filterSelect}
+                      className="filter-select"
+                    >
+                      <option value="">Tous les professeurs</option>
+                      {availableProfesseurs.map(prof => (
+                        <option key={prof} value={prof}>{prof}</option>
+                      ))}
+                    </select>
+                  </div>
                 </div>
               </div>
             )}
@@ -619,6 +797,9 @@ const ListePresences = () => {
             </div>
           </div>
         </div>
+
+
+
 
         {/* Sessions Table */}
         {filteredSessions.length === 0 ? (
@@ -661,6 +842,24 @@ const ListePresences = () => {
                         Cours
                       </div>
                     </th>
+                    <th style={styles.th}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <User size={16} />
+                        Matière
+                      </div>
+                    </th>
+                    <th style={styles.th}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <Clock size={16} />
+                        Période
+                      </div>
+                    </th>
+                    <th style={styles.th}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <User size={16} />
+                        Professeur
+                      </div>
+                    </th>
                     <th style={styles.th}>Taux de présence</th>
                     <th style={styles.th}>Actions</th>
                   </tr>
@@ -675,6 +874,29 @@ const ListePresences = () => {
                       </td>
                       <td style={styles.td}>
                         <div style={{ fontWeight: '500', color: '#111827' }}>{session.cours}</div>
+                      </td>
+                      <td style={styles.td}>
+                        <div style={{ color: '#6b7280' }}>
+                          {session.matiere || '—'}
+                        </div>
+                      </td>
+                      <td style={styles.td}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                          <Clock size={14} color="#6b7280" />
+                          <span style={{ color: '#6b7280', textTransform: 'capitalize' }}>
+                            {session.presences[0]?.periode || '—'}
+                          </span>
+                          {session.presences[0]?.heure && (
+                            <span style={{ fontSize: '12px', color: '#9ca3af' }}>
+                              ({session.presences[0].heure})
+                            </span>
+                          )}
+                        </div>
+                      </td>
+                      <td style={styles.td}>
+                        <div style={{ fontWeight: '500', color: '#111827' }}>
+                          {session.nomProfesseur || '—'}
+                        </div>
                       </td>
                       <td style={styles.td}>
                         <div style={styles.progressContainer}>
@@ -708,7 +930,6 @@ const ListePresences = () => {
                 </tbody>
               </table>
             </div>
-
             {/* Mobile Cards */}
             <div className="mobile-cards">
               {filteredSessions.map((session, idx) => (
@@ -721,6 +942,10 @@ const ListePresences = () => {
                       <p style={{ fontSize: '12px', color: '#6b7280', margin: 0, display: 'flex', alignItems: 'center', gap: '4px' }}>
                         <Calendar size={12} />
                         {formatDate(session.date)}
+                      </p>
+                      <p style={{ fontSize: '12px', color: '#6b7280', margin: '4px 0', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                        <User size={12} />
+                        {session.nomProfesseur || 'Professeur non spécifié'}
                       </p>
                     </div>
                     <button

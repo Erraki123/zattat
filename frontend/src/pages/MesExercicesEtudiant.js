@@ -27,6 +27,7 @@ const MesExercicesEtudiant = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterType, setFilterType] = useState('all');
   const [filterCours, setFilterCours] = useState('all');
+  const [filterProf, setFilterProf] = useState('all'); // 🆕
   const [sortBy, setSortBy] = useState('dateEnvoi');
   const [sortOrder, setSortOrder] = useState('desc');
   const [deletingId, setDeletingId] = useState(null);
@@ -116,17 +117,20 @@ const MesExercicesEtudiant = () => {
   // Obtenir la liste unique des cours et types
   const uniqueCours = [...new Set(exercices.map(ex => ex.cours))];
   const uniqueTypes = [...new Set(exercices.map(ex => ex.type))];
-
+  const uniqueProfs = [...new Set(exercices.map(ex => ex.professeur?.nom))]; // 🆕
+  
   // Filtrage et recherche
   const filteredExercices = exercices.filter(ex => {
-    const matchesSearch = ex.titre.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         ex.cours.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         (ex.remarque && ex.remarque.toLowerCase().includes(searchTerm.toLowerCase()));
-    
+    const matchesSearch =
+      ex.titre.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      ex.cours.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (ex.remarque && ex.remarque.toLowerCase().includes(searchTerm.toLowerCase())) ||
+      (ex.professeur?.nom && ex.professeur.nom.toLowerCase().includes(searchTerm.toLowerCase())) ||
+      (ex.professeur?.matiere && ex.professeur.matiere.toLowerCase().includes(searchTerm.toLowerCase()));
     const matchesType = filterType === 'all' || ex.type === filterType;
     const matchesCours = filterCours === 'all' || ex.cours === filterCours;
-    
-    return matchesSearch && matchesType && matchesCours;
+    const matchesProf = filterProf === 'all' || ex.professeur?.nom === filterProf;
+    return matchesSearch && matchesType && matchesCours && matchesProf;
   });
 
   // Tri
@@ -542,6 +546,21 @@ const MesExercicesEtudiant = () => {
             </select>
           </div>
 
+          {/* 🆕 Professeur filter */}
+          <div>
+            <label style={styles.label}>Professeur</label>
+            <select
+              value={filterProf}
+              onChange={(e) => setFilterProf(e.target.value)}
+              style={styles.select}
+            >
+              <option value="all">Tous les professeurs</option>
+              {uniqueProfs.map(nom => (
+                <option key={nom} value={nom}>{nom}</option>
+              ))}
+            </select>
+          </div>
+
           <div>
             <label style={styles.label}>Trier par</label>
             <select
@@ -648,6 +667,15 @@ const MesExercicesEtudiant = () => {
                         month: 'long',
                         day: 'numeric'
                       })}
+                    </span>
+                  </p>
+                </div>
+                {/* 👉 Affichage professeur et matière */}
+                <div style={styles.infoItem}>
+                  <Users size={16} style={styles.infoIcon} />
+                  <p style={styles.infoText}>
+                    Professeur: <span style={styles.infoValue}>
+                      {ex.professeur?.nom || '---'} ({ex.professeur?.matiere || '---'})
                     </span>
                   </p>
                 </div>

@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Calendar, Book, Eye, X, Users, Check, AlertCircle, FileText, Search, Filter, ChevronDown } from 'lucide-react';
+import { Calendar, Book, Eye, X, Users, Check, AlertCircle, FileText, Search, Filter, ChevronDown, Clock } from 'lucide-react';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
 import SidebarProf from '../components/SidebarProf';
@@ -18,72 +18,106 @@ const ListePresences = () => {
   const [presenceRateFilter, setPresenceRateFilter] = useState('');
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
   const [availableCours, setAvailableCours] = useState([]);
+  const [heureFilter, setHeureFilter] = useState('');
+  const [periodeFilter, setPeriodeFilter] = useState('');
+  const [availableHeures, setAvailableHeures] = useState([]);
+  const [matiereFilter, setMatiereFilter] = useState('');
+  const [professeurFilter, setProfesseurFilter] = useState('');
+  const [availableMatieres, setAvailableMatieres] = useState([]);
+  const [availableProfesseurs, setAvailableProfesseurs] = useState([]);
   const navigate = useNavigate();
 
-useEffect(() => {
-  const fetchPresences = async () => {
-    try {
-      setLoading(true);
-      const token = localStorage.getItem('token');
-      const role = localStorage.getItem('role');
-
-      // ✅ التحقق من صلاحية الوصول
-      if (!token || role !== 'prof') {
-        navigate('/');
-        return;
-      }
-
-      const res = await axios.get('http://localhost:5000/api/professeur/presences', {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-
-      const data = res.data;
-
-      // ✅ تجميع الحصص حسب التاريخ والدرس
-      const grouped = {};
-      for (let p of data) {
-        const key = `${new Date(p.dateSession).toDateString()}_${p.cours}`;
-        if (!grouped[key]) grouped[key] = [];
-        grouped[key].push(p);
-      }
-
-      const sessions = Object.entries(grouped).map(([key, values]) => {
-        const [date, cours] = key.split('_');
-        const presentCount = values.filter(p => p.present).length;
-        const totalCount = values.length;
-        return { 
-          date, 
-          cours, 
-          presences: values,
-          presentCount,
-          totalCount,
-          attendanceRate: totalCount > 0 ? Math.round((presentCount / totalCount) * 100) : 0
-        };
-      });
-
-      const uniqueCours = [...new Set(sessions.map(s => s.cours))];
-      setAvailableCours(uniqueCours);
-      setGroupedSessions(sessions);
-      setFilteredSessions(sessions);
-    } catch (err) {
-      console.error('❌ Erreur chargement présences:', err);
-    } finally {
-      setLoading(false);
-    }
+  // Utilitaire pour formater l'horaire
+  const formatHoraire = (heure, periode) => {
+    if (!heure && !periode) return 'Non spécifié';
+    if (!heure) return periode ? periode.charAt(0).toUpperCase() + periode.slice(1) : 'Non spécifié';
+    if (!periode) return heure;
+    return `${heure} (${periode.charAt(0).toUpperCase() + periode.slice(1)})`;
   };
 
-  fetchPresences();
-}, []);
+  useEffect(() => {
+    const fetchPresences = async () => {
+      try {
+        setLoading(true);
+        const token = localStorage.getItem('token');
+        const role = localStorage.getItem('role');
+
+        if (!token || role !== 'prof') {
+          navigate('/');
+          return;
+        }
+
+        const res = await axios.get('http://localhost:5000/api/professeur/presences', {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+
+        const data = res.data;
+
+        // ===== NOUVEAU GROUPAGE =====
+        const grouped = {};
+        for (let p of data) {
+          const dateStr = new Date(p.dateSession).toDateString();
+          const heureStr = p.heure || 'Non spécifiée';
+          const periodeStr = p.periode || 'Non spécifiée';
+          const matiereStr = p.matiere || 'Non spécifiée';
+          const nomProfesseurStr = p.nomProfesseur || 'Non spécifié';
+          const key = `${dateStr}_${p.cours}_${heureStr}_${periodeStr}_${matiereStr}_${nomProfesseurStr}`;
+          if (!grouped[key]) grouped[key] = [];
+          grouped[key].push(p);
+        }
+
+        const sessions = Object.entries(grouped).map(([key, values]) => {
+          const [date, cours, heure, periode, matiere, nomProfesseur] = key.split('_');
+          const presentCount = values.filter(p => p.present).length;
+          const totalCount = values.length;
+          return {
+            date,
+            cours,
+            heure,
+            periode,
+            matiere,
+            nomProfesseur,
+            presences: values,
+            presentCount,
+            totalCount,
+            attendanceRate: totalCount > 0 ? Math.round((presentCount / totalCount) * 100) : 0
+          };
+        });
+
+        const uniqueCours = [...new Set(sessions.map(s => s.cours))];
+        setAvailableCours(uniqueCours);
+        const uniqueHeures = [...new Set(sessions.map(s => s.heure).filter(h => h && h !== 'Non spécifiée'))];
+        setAvailableHeures(uniqueHeures);
+        const uniqueMatieres = [...new Set(sessions.map(s => s.matiere).filter(m => m && m !== 'Non spécifiée'))];
+        setAvailableMatieres(uniqueMatieres);
+        const uniqueProfesseurs = [...new Set(sessions.map(s => s.nomProfesseur).filter(p => p && p !== 'Non spécifié'))];
+        setAvailableProfesseurs(uniqueProfesseurs);
+
+        setGroupedSessions(sessions);
+        setFilteredSessions(sessions);
+      } catch (err) {
+        console.error('❌ Erreur chargement présences:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchPresences();
+  }, []);
 
   // Fonction de filtrage
   useEffect(() => {
     let filtered = [...groupedSessions];
 
-    // Filtre par recherche textuelle
+    // Recherche textuelle
     if (searchTerm) {
-      filtered = filtered.filter(session => 
+      filtered = filtered.filter(session =>
         session.cours.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        formatDate(session.date).toLowerCase().includes(searchTerm.toLowerCase())
+        formatDate(session.date).toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (session.heure && session.heure.toLowerCase().includes(searchTerm.toLowerCase())) ||
+        (session.periode && session.periode.toLowerCase().includes(searchTerm.toLowerCase())) ||
+        (session.matiere && session.matiere.toLowerCase().includes(searchTerm.toLowerCase())) ||
+        (session.nomProfesseur && session.nomProfesseur.toLowerCase().includes(searchTerm.toLowerCase()))
       );
     }
 
@@ -96,6 +130,16 @@ useEffect(() => {
     // Filtre par cours
     if (coursFilter && coursFilter !== 'all') {
       filtered = filtered.filter(session => session.cours === coursFilter);
+    }
+
+    // Filtre par matière
+    if (matiereFilter && matiereFilter !== 'all') {
+      filtered = filtered.filter(session => session.matiere === matiereFilter);
+    }
+
+    // Filtre par professeur
+    if (professeurFilter && professeurFilter !== 'all') {
+      filtered = filtered.filter(session => session.nomProfesseur === professeurFilter);
     }
 
     // Filtre par taux de présence
@@ -114,8 +158,18 @@ useEffect(() => {
       });
     }
 
+    // Filtre par heure
+    if (heureFilter && heureFilter !== 'all') {
+      filtered = filtered.filter(session => session.heure === heureFilter);
+    }
+
+    // Filtre par période
+    if (periodeFilter && periodeFilter !== 'all') {
+      filtered = filtered.filter(session => session.periode === periodeFilter);
+    }
+
     setFilteredSessions(filtered);
-  }, [searchTerm, dateFilter, coursFilter, presenceRateFilter, groupedSessions]);
+  }, [searchTerm, dateFilter, coursFilter, presenceRateFilter, heureFilter, periodeFilter, matiereFilter, professeurFilter, groupedSessions]);
 
   const formatDate = (d) => new Date(d).toLocaleDateString('fr-FR');
   const handleLogout = () => {
@@ -128,6 +182,8 @@ useEffect(() => {
     setDateFilter('');
     setCoursFilter('');
     setPresenceRateFilter('');
+    setHeureFilter('');
+    setPeriodeFilter('');
   };
 
   const styles = {
@@ -517,11 +573,11 @@ useEffect(() => {
 
         {/* Header */}
         <div style={styles.card}>
-          <div style={{ 
-            ...styles.header, 
-            justifyContent: 'center', 
-            alignItems: 'center', 
-            textAlign: 'center' 
+          <div style={{
+            ...styles.header,
+            justifyContent: 'center',
+            alignItems: 'center',
+            textAlign: 'center'
           }}>
             <div style={styles.iconContainer}>
             </div>
@@ -537,7 +593,7 @@ useEffect(() => {
               <Search size={20} style={styles.searchIcon} />
               <input
                 type="text"
-                placeholder="Rechercher par cours, date..."
+                placeholder="Rechercher par cours, date, heure, période..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 style={styles.searchInput}
@@ -554,16 +610,16 @@ useEffect(() => {
               >
                 <Filter size={16} />
                 Filtres avancés
-                <ChevronDown 
-                  size={16} 
-                  style={{ 
+                <ChevronDown
+                  size={16}
+                  style={{
                     transform: showAdvancedFilters ? 'rotate(180deg)' : 'rotate(0deg)',
                     transition: 'transform 0.2s'
-                  }} 
+                  }}
                 />
               </button>
-              
-              {(searchTerm || dateFilter || coursFilter || presenceRateFilter) && (
+
+              {(searchTerm || dateFilter || coursFilter || presenceRateFilter || heureFilter || periodeFilter) && (
                 <button
                   onClick={clearFilters}
                   style={styles.clearButton}
@@ -588,7 +644,7 @@ useEffect(() => {
                       className="filter-input"
                     />
                   </div>
-                  
+
                   <div style={styles.filterGroup}>
                     <label style={styles.filterLabel}>Cours</label>
                     <select
@@ -603,7 +659,66 @@ useEffect(() => {
                       ))}
                     </select>
                   </div>
-                  
+
+                  <div style={styles.filterGroup}>
+                    <label style={styles.filterLabel}>Matière</label>
+                    <select
+                      value={matiereFilter}
+                      onChange={(e) => setMatiereFilter(e.target.value)}
+                      style={styles.filterSelect}
+                      className="filter-select"
+                    >
+                      <option value="">Toutes les matières</option>
+                      {availableMatieres.map(matiere => (
+                        <option key={matiere} value={matiere}>{matiere}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div style={styles.filterGroup}>
+                    <label style={styles.filterLabel}>Professeur</label>
+                    <select
+                      value={professeurFilter}
+                      onChange={(e) => setProfesseurFilter(e.target.value)}
+                      style={styles.filterSelect}
+                      className="filter-select"
+                    >
+                      <option value="">Tous les professeurs</option>
+                      {availableProfesseurs.map(prof => (
+                        <option key={prof} value={prof}>{prof}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div style={styles.filterGroup}>
+                    <label style={styles.filterLabel}>Heure</label>
+                    <select
+                      value={heureFilter}
+                      onChange={(e) => setHeureFilter(e.target.value)}
+                      style={styles.filterSelect}
+                      className="filter-select"
+                    >
+                      <option value="">Toutes les heures</option>
+                      {availableHeures.map(heure => (
+                        <option key={heure} value={heure}>{heure}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div style={styles.filterGroup}>
+                    <label style={styles.filterLabel}>Période</label>
+                    <select
+                      value={periodeFilter}
+                      onChange={(e) => setPeriodeFilter(e.target.value)}
+                      style={styles.filterSelect}
+                      className="filter-select"
+                    >
+                      <option value="">Toutes les périodes</option>
+                      <option value="matin">Matin</option>
+                      <option value="soir">Soir</option>
+                    </select>
+                  </div>
+
                   <div style={styles.filterGroup}>
                     <label style={styles.filterLabel}>Taux de présence</label>
                     <select
@@ -673,6 +788,24 @@ useEffect(() => {
                         Cours
                       </div>
                     </th>
+                    <th style={styles.th}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <FileText size={16} />
+                        Matière
+                      </div>
+                    </th>
+                    <th style={styles.th}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <Users size={16} />
+                        Professeur
+                      </div>
+                    </th>
+                    <th style={styles.th}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <Clock size={16} />
+                        Horaire
+                      </div>
+                    </th>
                     <th style={styles.th}>Taux de présence</th>
                     <th style={styles.th}>Actions</th>
                   </tr>
@@ -689,14 +822,42 @@ useEffect(() => {
                         <div style={{ fontWeight: '500', color: '#111827' }}>{session.cours}</div>
                       </td>
                       <td style={styles.td}>
+                        <div style={{
+                          fontWeight: '500',
+                          color: '#059669',
+                          backgroundColor: '#f0fdf4',
+                          padding: '4px 8px',
+                          borderRadius: '12px',
+                          fontSize: '12px',
+                          display: 'inline-block'
+                        }}>
+                          {session.matiere || 'Non spécifiée'}
+                        </div>
+                      </td>
+                      <td style={styles.td}>
+                        <div style={{ fontWeight: '500', color: '#111827' }}>
+                          {session.nomProfesseur || 'Non spécifié'}
+                        </div>
+                      </td>
+                      <td style={styles.td}>
+                        <div>
+                          <div style={{ fontWeight: '500', color: '#111827' }}>
+                            {session.heure || 'Non spécifiée'}
+                          </div>
+                          <div style={{ fontSize: '12px', color: '#6b7280', textTransform: 'capitalize' }}>
+                            {session.periode || 'Non spécifiée'}
+                          </div>
+                        </div>
+                      </td>
+                      <td style={styles.td}>
                         <div style={styles.progressContainer}>
                           <div style={styles.progressBar}>
-                            <div 
+                            <div
                               style={{
                                 ...styles.progressFill,
                                 width: `${session.attendanceRate}%`,
-                                backgroundColor: session.attendanceRate >= 80 ? '#10b981' : 
-                                               session.attendanceRate >= 50 ? '#f59e0b' : '#ef4444'
+                                backgroundColor: session.attendanceRate >= 80 ? '#10b981' :
+                                  session.attendanceRate >= 50 ? '#f59e0b' : '#ef4444'
                               }}
                             ></div>
                           </div>
@@ -730,9 +891,29 @@ useEffect(() => {
                       <h3 style={{ fontSize: '14px', fontWeight: '500', color: '#111827', margin: '0 0 4px 0' }}>
                         {session.cours}
                       </h3>
-                      <p style={{ fontSize: '12px', color: '#6b7280', margin: 0, display: 'flex', alignItems: 'center', gap: '4px' }}>
+                      <div style={{
+                        display: 'inline-block',
+                        fontWeight: '500',
+                        color: '#059669',
+                        backgroundColor: '#f0fdf4',
+                        padding: '2px 6px',
+                        borderRadius: '8px',
+                        fontSize: '10px',
+                        marginBottom: '4px'
+                      }}>
+                        {session.matiere || 'Non spécifiée'}
+                      </div>
+                      <p style={{ fontSize: '12px', color: '#6b7280', margin: '2px 0', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                        <Users size={12} />
+                        {session.nomProfesseur || 'Non spécifié'}
+                      </p>
+                      <p style={{ fontSize: '12px', color: '#6b7280', margin: '2px 0', display: 'flex', alignItems: 'center', gap: '4px' }}>
                         <Calendar size={12} />
                         {formatDate(session.date)}
+                      </p>
+                      <p style={{ fontSize: '12px', color: '#6b7280', margin: '2px 0 0 0', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                        <Clock size={12} />
+                        {session.heure || 'Non spécifiée'} - {session.periode || 'Non spécifiée'}
                       </p>
                     </div>
                     <button
@@ -749,12 +930,12 @@ useEffect(() => {
                   </div>
                   <div style={styles.progressContainer}>
                     <div style={{ ...styles.progressBar, flex: 1 }}>
-                      <div 
+                      <div
                         style={{
                           ...styles.progressFill,
                           width: `${session.attendanceRate}%`,
-                          backgroundColor: session.attendanceRate >= 80 ? '#10b981' : 
-                                         session.attendanceRate >= 50 ? '#f59e0b' : '#ef4444'
+                          backgroundColor: session.attendanceRate >= 80 ? '#10b981' :
+                            session.attendanceRate >= 50 ? '#f59e0b' : '#ef4444'
                         }}
                       ></div>
                     </div>
@@ -782,6 +963,29 @@ useEffect(() => {
                   <p style={{ fontSize: '14px', color: '#6b7280', margin: '4px 0 0 0', display: 'flex', alignItems: 'center', gap: '8px' }}>
                     <Book size={16} />
                     {sessionActive.cours}
+                  </p>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px', margin: '4px 0' }}>
+                    <p style={{ fontSize: '14px', color: '#6b7280', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <FileText size={16} />
+                      <span style={{
+                        fontWeight: '500',
+                        color: '#059669',
+                        backgroundColor: '#f0fdf4',
+                        padding: '4px 8px',
+                        borderRadius: '12px',
+                        fontSize: '12px'
+                      }}>
+                        {sessionActive.matiere || 'Non spécifiée'}
+                      </span>
+                    </p>
+                    <p style={{ fontSize: '14px', color: '#6b7280', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <Users size={16} />
+                      {sessionActive.nomProfesseur || 'Non spécifié'}
+                    </p>
+                  </div>
+                  <p style={{ fontSize: '14px', color: '#6b7280', margin: '2px 0 0 0', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <Clock size={16} />
+                    {sessionActive.heure || 'Non spécifiée'} - <span style={{ textTransform: 'capitalize' }}>{sessionActive.periode || 'Non spécifiée'}</span>
                   </p>
                 </div>
                 <button

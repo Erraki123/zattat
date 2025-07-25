@@ -1,13 +1,30 @@
 import React, { useEffect, useState } from 'react';
-import { BookOpen, Calendar, Users, Save, CheckCircle, XCircle, MessageSquare } from 'lucide-react';
+import { 
+  BookOpen, 
+  Calendar, 
+  Users, 
+  Save, 
+  CheckCircle, 
+  XCircle, 
+  MessageSquare, 
+  Clock,
+  GraduationCap,
+  Sun,
+  Moon,
+  UserCheck,
+  UserX
+} from 'lucide-react';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
 import Sidebar from '../components/SidebarProf'; // Composant sidebar pour professeur
+
 const AjouterPresence = () => {
   const [cours, setCours] = useState([]);
   const [etudiants, setEtudiants] = useState([]);
   const [selectedCours, setSelectedCours] = useState('');
   const [dateSession, setDateSession] = useState('');
+  const [heure, setHeure] = useState('');
+  const [periode, setPeriode] = useState('matin');
   const [presences, setPresences] = useState([]);
   const [message, setMessage] = useState('');
   const navigate = useNavigate();
@@ -35,6 +52,24 @@ const AjouterPresence = () => {
     };
 
     fetchCours();
+  }, []);
+
+  // Move the CSS class addition useEffect inside the component
+  useEffect(() => {
+    const configGrid = document.querySelector('[data-config-grid]');
+    if (configGrid) {
+      configGrid.classList.add('configuration-grid');
+    }
+    
+    const leftCol = document.querySelector('[data-left-column]');
+    if (leftCol) {
+      leftCol.classList.add('left-column');
+    }
+    
+    const rightCol = document.querySelector('[data-right-column]');  
+    if (rightCol) {
+      rightCol.classList.add('right-column');
+    }
   }, []);
 
   const handleLogout = () => {
@@ -79,6 +114,12 @@ const AjouterPresence = () => {
     e.preventDefault();
     const token = localStorage.getItem('token');
 
+    // Validation des champs requis
+    if (!selectedCours || !dateSession || !heure) {
+      setMessage('error');
+      return;
+    }
+
     try {
       for (const pres of presences) {
         await axios.post('http://localhost:5000/api/presences', {
@@ -86,7 +127,9 @@ const AjouterPresence = () => {
           cours: selectedCours,
           dateSession,
           present: pres.present,
-          remarque: pres.remarque
+          remarque: pres.remarque,
+          heure,        // 🆕 Ajout du champ heure
+          periode       // 🆕 Ajout du champ periode
         }, {
           headers: { Authorization: `Bearer ${token}` },
         });
@@ -100,13 +143,14 @@ const AjouterPresence = () => {
 
   return (
     <div style={styles.container}>
-      {/* Header moderne */}      <Sidebar onLogout={handleLogout} />
+      {/* Header moderne */}
+      <Sidebar onLogout={handleLogout} />
 
       <div style={styles.header}>
         <div style={styles.headerContent}>
           <div style={styles.titleSection}>
             <div style={styles.iconContainer}>
-              <Users style={styles.titleIcon} />
+              <GraduationCap style={styles.titleIcon} />
             </div>
             <h1 style={styles.title}>Enregistrement de Présence</h1>
           </div>
@@ -126,38 +170,95 @@ const AjouterPresence = () => {
 
           {/* Formulaire */}
           <div style={styles.formContent}>
-            {/* Sélection du cours */}
-            <div style={styles.formGroup}>
-              <label style={styles.label}>
-                <BookOpen style={styles.labelIcon} />
-                Sélectionner un cours
-              </label>
-              <select 
-                style={styles.select} 
-                value={selectedCours} 
-                onChange={handleCoursChange} 
-                required
-              >
-                <option value="">Choisir un cours...</option>
-                {cours.map(c => (
-                  <option key={c._id} value={c.nom}>{c.nom}</option>
-                ))}
-              </select>
-            </div>
+            {/* Configuration en deux colonnes */}
+            <div style={styles.configurationGrid} data-config-grid>
+              {/* Colonne gauche */}
+              <div style={styles.leftColumn} data-left-column>
+                {/* En-tête colonne gauche */}
+                <div style={styles.columnHeader}>
+                  <BookOpen style={styles.columnIcon} />
+                  <h3 style={styles.columnTitle}>Informations du cours</h3>
+                </div>
+                
+                {/* Sélection du cours */}
+                <div style={styles.formGroup}>
+                  <label style={styles.label}>
+                    <BookOpen style={styles.labelIcon} />
+                    Sélectionner un cours
+                  </label>
+                  <select 
+                    style={styles.select} 
+                    value={selectedCours} 
+                    onChange={handleCoursChange} 
+                    required
+                  >
+                    <option value="">Choisir un cours...</option>
+                    {cours.map(c => (
+                      <option key={c._id} value={c.nom}>{c.nom}</option>
+                    ))}
+                  </select>
+                </div>
 
-            {/* Date de session */}
-            <div style={styles.formGroup}>
-              <label style={styles.label}>
-                <Calendar style={styles.labelIcon} />
-                Date de session
-              </label>
-              <input 
-                type="date" 
-                style={styles.input}
-                value={dateSession} 
-                onChange={e => setDateSession(e.target.value)} 
-                required 
-              />
+                {/* Date de session */}
+                <div style={styles.formGroup}>
+                  <label style={styles.label}>
+                    <Calendar style={styles.labelIcon} />
+                    Date de session
+                  </label>
+                  <input 
+                    type="date" 
+                    style={styles.input}
+                    value={dateSession} 
+                    onChange={e => setDateSession(e.target.value)} 
+                    required 
+                  />
+                </div>
+              </div>
+
+              {/* Colonne droite */}
+              <div style={styles.rightColumn} data-right-column>
+                {/* En-tête colonne droite */}
+                <div style={styles.columnHeader}>
+                  <Clock style={styles.columnIcon} />
+                  <h3 style={styles.columnTitle}>Horaire de session</h3>
+                </div>
+                
+                {/* Heure de la session */}
+                <div style={styles.formGroup}>
+                  <label style={styles.label}>
+                    <Clock style={styles.labelIcon} />
+                    Heure de la session
+                  </label>
+                  <input 
+                    type="time" 
+                    style={styles.input}
+                    value={heure} 
+                    onChange={e => setHeure(e.target.value)} 
+                    required 
+                  />
+                </div>
+
+                {/* Période de la session */}
+                <div style={styles.formGroup}>
+                  <label style={styles.label}>
+                    <Clock style={styles.labelIcon} />
+                    Période
+                  </label>
+                  <select 
+                    style={styles.select} 
+                    value={periode} 
+                    onChange={e => setPeriode(e.target.value)} 
+                    required
+                  >
+                    <option value="matin">
+                      <Sun style={{ display: 'inline', width: '16px', height: '16px' }} /> Matin
+                    </option>
+                    <option value="soir">
+                      <Moon style={{ display: 'inline', width: '16px', height: '16px' }} /> Soir
+                    </option>
+                  </select>
+                </div>
+              </div>
             </div>
 
             {/* Liste des présences */}
@@ -203,8 +304,14 @@ const AjouterPresence = () => {
                               value={p.present} 
                               onChange={(e) => handlePresenceChange(i, 'present', e.target.value === 'true')}
                             >
-                              <option value="true">✓ Présent</option>
-                              <option value="false">✗ Absent</option>
+                              <option value="true">
+                                <UserCheck style={{ display: 'inline', width: '14px', height: '14px', marginRight: '4px' }} />
+                                Présent
+                              </option>
+                              <option value="false">
+                                <UserX style={{ display: 'inline', width: '14px', height: '14px', marginRight: '4px' }} />
+                                Absent
+                              </option>
                             </select>
                           </td>
                           <td style={styles.td}>
@@ -265,7 +372,7 @@ const AjouterPresence = () => {
                 ) : (
                   <>
                     <XCircle style={styles.messageIcon} />
-                    Échec lors de l'enregistrement. Veuillez réessayer.
+                    Échec lors de l'enregistrement. Veuillez vérifier tous les champs requis.
                   </>
                 )}
               </div>
@@ -304,7 +411,16 @@ const styles = {
     gap: '12px',
     padding: '24px 0'
   },
- 
+  iconContainer: {
+    width: '48px',
+    height: '48px',
+    borderRadius: '12px',
+    background: 'linear-gradient(135deg, #3b82f6, #4f46e5)',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    boxShadow: '0 4px 15px rgba(59, 130, 246, 0.3)'
+  },
   titleIcon: {
     width: '32px',
     height: '32px',
@@ -353,6 +469,57 @@ const styles = {
   },
   formContent: {
     padding: '32px'
+  },
+  configurationGrid: {
+    display: 'grid',
+    gridTemplateColumns: '1fr 1fr',
+    gap: '32px',
+    marginBottom: '24px',
+    '@media (max-width: 768px)': {
+      gridTemplateColumns: '1fr',
+      gap: '0'
+    }
+  },
+  leftColumn: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '24px',
+    padding: '24px',
+    background: 'linear-gradient(135deg, #f8fafc, #f1f5f9)',
+    borderRadius: '16px',
+    border: '1px solid rgba(229, 231, 235, 0.6)',
+    boxShadow: '0 2px 8px rgba(0, 0, 0, 0.04)',
+    position: 'relative'
+  },
+  rightColumn: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '24px',
+    padding: '24px',
+    background: 'linear-gradient(135deg, #fefcbf, #fef3c7)',
+    borderRadius: '16px',
+    border: '1px solid rgba(217, 119, 6, 0.2)',
+    boxShadow: '0 2px 8px rgba(0, 0, 0, 0.04)',
+    position: 'relative'
+  },
+  columnHeader: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+    marginBottom: '8px',
+    paddingBottom: '12px',
+    borderBottom: '1px solid rgba(0, 0, 0, 0.1)'
+  },
+  columnIcon: {
+    width: '18px',
+    height: '18px',
+    color: '#4338ca'
+  },
+  columnTitle: {
+    fontSize: '16px',
+    fontWeight: '600',
+    color: '#1f2937',
+    margin: '0'
   },
   formGroup: {
     marginBottom: '24px'
@@ -567,6 +734,18 @@ const additionalStyles = `
     box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1) !important;
   }
   
+  /* Responsive Design */
+  @media (max-width: 968px) {
+    .configuration-grid {
+      grid-template-columns: 1fr !important;
+      gap: 16px !important;
+    }
+    
+    .left-column, .right-column {
+      padding: 20px !important;
+    }
+  }
+  
   @media (max-width: 768px) {
     .main-content {
       padding: 16px !important;
@@ -574,6 +753,21 @@ const additionalStyles = `
     
     .form-content {
       padding: 20px !important;
+    }
+    
+    .configuration-grid {
+      grid-template-columns: 1fr !important;
+      gap: 16px !important;
+      margin-bottom: 16px !important;
+    }
+    
+    .left-column {
+      background: linear-gradient(135deg, #f8fafc, #f1f5f9) !important;
+      margin-bottom: 0 !important;
+    }
+    
+    .right-column {
+      background: linear-gradient(135deg, #fefcbf, #fef3c7) !important;
     }
     
     .title {
@@ -598,10 +792,94 @@ const additionalStyles = `
       width: 100% !important;
       justify-content: center !important;
     }
+    
+    .student-info {
+      flex-direction: column !important;
+      align-items: center !important;
+      text-align: center !important;
+      gap: 8px !important;
+    }
+    
+    .student-name {
+      font-size: 14px !important;
+    }
+    
+    .avatar {
+      width: 35px !important;
+      height: 35px !important;
+    }
+    
+    .avatar-text {
+      font-size: 14px !important;
+    }
+    
+    .status-select {
+      min-width: 100px !important;
+      font-size: 13px !important;
+      padding: 6px 12px !important;
+    }
+    
+    .form-group {
+      margin-bottom: 16px !important;
+    }
+    
+    .card-header {
+      padding: 20px 24px !important;
+    }
+    
+    .card-title-text {
+      font-size: 18px !important;
+    }
+  }
+  
+  @media (max-width: 480px) {
+    .main-content {
+      padding: 12px !important;
+    }
+    
+    .form-content {
+      padding: 16px !important;
+    }
+    
+    .left-column, .right-column {
+      padding: 16px !important;
+      gap: 16px !important;
+    }
+    
+    .header-content {
+      padding: 0 16px !important;
+    }
+    
+    .title {
+      font-size: 20px !important;
+    }
+    
+    .title-section {
+      flex-direction: column !important;
+      gap: 8px !important;
+      padding: 16px 0 !important;
+    }
+    
+    .card-header {
+      padding: 16px 20px !important;
+    }
+    
+    .table-container {
+      border-radius: 8px !important;
+    }
+    
+    .submit-container {
+      padding-top: 16px !important;
+    }
+    
+    .submit-button {
+      padding: 14px 24px !important;
+      font-size: 15px !important;
+    }
   }
 `;
 
-// Ajouter les styles CSS
+// Ajouter les styles CSS avec des classes
 const styleSheet = document.createElement("style");
 styleSheet.innerText = additionalStyles;
 document.head.appendChild(styleSheet);

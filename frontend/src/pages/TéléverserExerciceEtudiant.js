@@ -15,6 +15,8 @@ const TeleverserExerciceEtudiant = () => {
   const [coursList, setCoursList] = useState([]);
   const [message, setMessage] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [professeurId, setProfesseurId] = useState('');
+  const [professeursDispo, setProfesseursDispo] = useState([]);
 
   useEffect(() => {
     const fetchCours = async () => {
@@ -38,12 +40,23 @@ const TeleverserExerciceEtudiant = () => {
     fetchCours();
   }, []);
 
+  useEffect(() => {
+    const profsForCours = coursList.find(c => c.nomCours === cours);
+    setProfesseursDispo(profsForCours ? profsForCours.professeurs : []);
+    setProfesseurId('');
+  }, [cours]);
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setIsSubmitting(true);
 
     if (!titre || !cours || !file || !type || !numero) {
       setMessage({ type: 'error', text: 'Tous les champs sont requis' });
+      setIsSubmitting(false);
+      return;
+    }
+    if (!professeurId) {
+      setMessage({ type: 'error', text: 'Veuillez choisir un professeur.' });
       setIsSubmitting(false);
       return;
     }
@@ -54,6 +67,7 @@ const TeleverserExerciceEtudiant = () => {
     formData.append('type', type);
     formData.append('numero', numero);
     formData.append('fichier', file);
+    formData.append('professeurId', professeurId);
 
     const token = localStorage.getItem('token');
     try {
@@ -183,11 +197,15 @@ const TeleverserExerciceEtudiant = () => {
                 marginBottom: '8px'
               }}>
                 <BookOpen size={16} style={{ marginRight: '8px', verticalAlign: 'middle' }} />
-                Matière
-              </label>
+Couers              </label>
               <select
                 value={cours}
-                onChange={(e) => setCours(e.target.value)}
+                onChange={(e) => {
+                  const selected = coursList.find(c => c.nomCours === e.target.value);
+                  setCours(e.target.value);
+                  setProfesseursDispo(selected?.professeurs || []);
+                  setProfesseurId('');
+                }}
                 style={{
                   width: '100%',
                   padding: '15px 20px',
@@ -208,8 +226,34 @@ const TeleverserExerciceEtudiant = () => {
                 }}
               >
                 <option value="">-- Choisir une matière --</option>
-                {coursList.map((nomCours, index) => (
-                  <option key={index} value={nomCours}>{nomCours}</option>
+                {coursList.map((item, index) => (
+                  <option key={index} value={item.nomCours}>{item.nomCours}</option>
+                ))}
+              </select>
+            </div>
+            {/* Choisir un professeur */}
+            <div>
+              <label style={{ fontSize: '14px', fontWeight: '600', marginBottom: '8px', display: 'block' }}>
+                Professeur
+              </label>
+              <select
+                value={professeurId}
+                onChange={(e) => setProfesseurId(e.target.value)}
+                style={{
+                  width: '100%',
+                  padding: '15px 20px',
+                  border: '2px solid #e2e8f0',
+                  borderRadius: '12px',
+                  fontSize: '16px',
+                  background: '#fafafa',
+                  cursor: 'pointer'
+                }}
+              >
+                <option value="">-- Choisir un professeur --</option>
+                {professeursDispo.map((prof) => (
+                  <option key={prof._id} value={prof._id}>
+                    {prof.nom} ({prof.matiere})
+                  </option>
                 ))}
               </select>
             </div>

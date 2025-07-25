@@ -11,6 +11,11 @@ const exerciceSchema = new mongoose.Schema({
   enum: ['Devoir', 'Examen', 'TD'],
   default: 'Devoir'
 },
+professeur: {
+  type: mongoose.Schema.Types.ObjectId,
+  ref: 'Professeur',
+  required: true
+},
 numero: {
   type: Number,
   default: 1

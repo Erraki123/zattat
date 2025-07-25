@@ -308,6 +308,8 @@ const ProfilEtudiant = () => {
                       <tr style={styles.tableHeader}>
                         <th style={styles.th}>Date</th>
                         <th style={styles.th}>Cours</th>
+                        <th style={styles.th}>Matière</th>
+                        <th style={styles.th}>Période</th>
                         <th style={styles.th}>Statut</th>
                         <th style={styles.th}>Remarque</th>
                       </tr>
@@ -320,6 +322,22 @@ const ProfilEtudiant = () => {
                           </td>
                           <td style={styles.td}>
                             <span style={styles.courseBadge}>{p.cours}</span>
+                          </td>
+                          <td style={styles.td}>
+                            <span>{p.matiere || '—'}</span>
+                          </td>
+                          <td style={styles.td}>
+                            <span style={{ 
+                              backgroundColor: '#fefce8', 
+                              color: '#92400e', 
+                              padding: '4px 8px', 
+                              borderRadius: '6px',
+                              fontSize: '12px',
+                              fontWeight: '500',
+                              border: '1px solid #fde68a'
+                            }}>
+                              {p.periode === 'matin' ? 'Matin' : p.periode === 'soir' ? 'Soir' : '—'}
+                            </span>
                           </td>
                           <td style={styles.td}>
                             <div style={styles.presenceStatus}>

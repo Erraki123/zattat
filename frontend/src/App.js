@@ -35,9 +35,16 @@ import EtudiantLiveCours from './pages/EtudiantLiveCours';
 import LiveCoursEtudiant from './pages/LiveCoursEtudiant';
 import ProfLiveCours from './pages/ProfLiveCours';
 import ProfileProfesseur from './pages/ProfileProfesseur';
+import QREtudiant from './pages/qretudiant';
+import QrWeekPlanningAdmin from './pages/QrWeekPlanningAdmin';
+
 import MessageProf from './pages/MessageProf';
 import MessageEtudiant from './pages/MessageEtudiant';
 import ProfileUpdatePage from './pages/ProfileUpdatePage';
+import PaiementsExp from './pages/PaiementsExp';
+import KastlerHomepage from './pages/KastlerHomepage';
+
+
 
 
 function AppContent() {
@@ -113,8 +120,10 @@ function AppContent() {
 
       <Routes>
         {/* Routes principales */}
-        <Route path="/" element={<Login />} />
+        <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
+                <Route path="/" element={<KastlerHomepage/>} />
+
         
         {/* Routes Admin */}
         <Route path="/admin" element={<AdminDashboard />} />
@@ -129,6 +138,10 @@ function AppContent() {
         <Route path="/ajouter-presence" element={<AjouterPresence />} />
         <Route path="/liste-presences" element={<ListePresences />} />
         <Route path="/update-profil" element={<ProfileUpdatePage />} />
+        <Route path="/paiements-exp" element={<PaiementsExp />} />
+<Route path="/qretudiant" element={<QREtudiant />} />
+
+<Route path="/admin/qr-week-planning" element={<QrWeekPlanningAdmin />} />
 
         {/* Routes Professeur */}
         <Route path="/professeur" element={<ProfesseurDashboard />} />

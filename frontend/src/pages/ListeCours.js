@@ -61,10 +61,10 @@ const ListeCours = () => {
   const handleAjoutCours = async (e) => {
     e.preventDefault();
 
-    if (!nom.trim() || professeurs_selectionnes.length === 0) {
-      setMessage('❌ Veuillez remplir tous les champs et sélectionner au moins un professeur');
-      return;
-    }
+  if (!nom.trim()) {
+  setMessage('❌ Veuillez remplir le nom du cours');
+  return;
+}
 
     try {
       const token = localStorage.getItem('token');
@@ -814,7 +814,7 @@ const ListeCours = () => {
                           }}
                         />
                         <span style={{ fontSize: '0.875rem' }}>
-                          {p.nom} ({p.email})
+                          {p.nom} - {p.matiere}
                         </span>
                       </label>
                     ))}

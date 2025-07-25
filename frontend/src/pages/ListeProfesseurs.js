@@ -26,6 +26,7 @@ const ListeProfesseurs = () => {
   const [recherche, setRecherche] = useState('');
   const [filtreGenre, setFiltreGenre] = useState('');
   const [filtreCours, setFiltreCours] = useState('');
+  const [filtreMatiere, setFiltreMatiere] = useState('');
   const [filtreActif, setFiltreActif] = useState('');
   const [pageActuelle, setPageActuelle] = useState(1);
   const [professeursParPage] = useState(10);
@@ -41,6 +42,7 @@ const ListeProfesseurs = () => {
     email: '',
     motDePasse: '',
     cours: [],
+    matiere: '', // NOUVEAU CHAMP
     actif: true
   });
   const [vueMode, setVueMode] = useState('tableau'); // 'tableau' ou 'carte'
@@ -64,6 +66,7 @@ const ListeProfesseurs = () => {
     email: '',
     motDePasse: '',
     cours: [],
+    matiere: '', // NOUVEAU CHAMP
     actif: true
   });
   const [imageFileModifier, setImageFileModifier] = useState(null);
@@ -132,6 +135,12 @@ const ListeProfesseurs = () => {
         p.cours.some(cours => cours.toLowerCase().includes(filtreCours.toLowerCase()))
       );
     }
+    // Filtre par matière
+    if (filtreMatiere) {
+      resultats = resultats.filter(p => 
+        p.matiere && p.matiere.toLowerCase().includes(filtreMatiere.toLowerCase())
+      );
+    }
 
     // Filtre par statut actif
     if (filtreActif !== '') {
@@ -158,6 +167,7 @@ const ListeProfesseurs = () => {
       email: '',
       motDePasse: '',
       cours: [],
+      matiere: '', // AJOUTER ICI
       actif: true
     });
     setImageFile(null);
@@ -193,6 +203,7 @@ const ListeProfesseurs = () => {
       formData.append('email', formAjout.email);
       formData.append('motDePasse', formAjout.motDePasse);
       formData.append('actif', formAjout.actif);
+      formData.append('matiere', formAjout.matiere); // AJOUTER ICI
 
       formAjout.cours.forEach(c => formData.append('cours[]', c));
       if (imageFile) formData.append('image', imageFile);
@@ -216,6 +227,7 @@ const ListeProfesseurs = () => {
         email: '',
         motDePasse: '',
         cours: [],
+        matiere: '', // AJOUTER ICI
         actif: true
       });
       setImageFile(null);
@@ -242,6 +254,7 @@ const ListeProfesseurs = () => {
       email: professeur.email || '',
       motDePasse: '',
       cours: professeur.cours || [],
+      matiere: professeur.matiere || '', // AJOUTER ICI
       actif: professeur.actif ?? true
     });
     setImageFileModifier(null);
@@ -260,6 +273,7 @@ const ListeProfesseurs = () => {
       email: '',
       motDePasse: '',
       cours: [],
+      matiere: '', // AJOUTER ICI
       actif: true
     });
     setImageFileModifier(null);
@@ -299,6 +313,7 @@ const ListeProfesseurs = () => {
       }
       
       formData.append('actif', formModifier.actif);
+      formData.append('matiere', formModifier.matiere); // AJOUTER ICI
 
       formModifier.cours.forEach(c => formData.append('cours[]', c));
       if (imageFileModifier) formData.append('image', imageFileModifier);
@@ -370,6 +385,7 @@ setProfesseurs(professeurs.map(p => p._id === professeurAModifier._id ? response
     setFiltreGenre('');
     setFiltreCours('');
     setFiltreActif('');
+    setFiltreMatiere('');
   };
 
   const formatDate = (isoDate) => {
@@ -415,7 +431,7 @@ setProfesseurs(professeurs.map(p => p._id === professeurAModifier._id ? response
   }
 
   return (
-    <div className="liste-etudiants-container"style={{
+    <div className="liste-etudiants-container" style={{
           background: 'linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 25%, #f3e8ff 100%)'
         }}>
       <Sidebar onLogout={handleLogout} />
@@ -490,6 +506,17 @@ setProfesseurs(professeurs.map(p => p._id === professeurAModifier._id ? response
           </div>
 
           <div className="filtre-groupe">
+            <label>Matière:</label>
+            <input
+              type="text"
+              placeholder="Filtrer par matière..."
+              value={filtreMatiere}
+              onChange={(e) => setFiltreMatiere(e.target.value)}
+              className="input-recherche"
+            />
+          </div>
+
+          <div className="filtre-groupe">
             <label>Statut:</label>
             <select
               value={filtreActif}
@@ -521,6 +548,7 @@ setProfesseurs(professeurs.map(p => p._id === professeurAModifier._id ? response
                 <th>Âge</th>
                 <th>Téléphone</th>
                 <th>Email</th>
+                <th>Matière</th>
                 <th>Cours</th>
                 <th>Statut</th>
                 <th>Image</th>
@@ -530,7 +558,7 @@ setProfesseurs(professeurs.map(p => p._id === professeurAModifier._id ? response
             <tbody>
               {professeursActuels.length === 0 ? (
                 <tr>
-                  <td colSpan="10" className="aucun-resultat">
+                  <td colSpan="11" className="aucun-resultat">
                     Aucun professeur trouvé
                   </td>
                 </tr>
@@ -543,10 +571,10 @@ setProfesseurs(professeurs.map(p => p._id === professeurAModifier._id ? response
                     <td>{calculerAge(p.dateNaissance)} ans</td>
                     <td>{p.telephone}</td>
                     <td>{p.email}</td>
-                  <td className="cours-colonne">
-  {p.cours?.join(', ') || 'Aucun cours'}
-</td>
-
+                    <td>{p.matiere || 'Non définie'}</td>
+                    <td className="cours-colonne">
+                      {p.cours?.join(', ') || 'Aucun cours'}
+                    </td>
                     <td className="statut-colonne">
                       <div className="toggle-switch-container">
                         <span className={`statut-text ${p.actif ? 'actif' : 'inactif'}`}>
@@ -654,6 +682,12 @@ setProfesseurs(professeurs.map(p => p._id === professeurAModifier._id ? response
                         <span className="carte-label">Email:</span>
                         <span>
                           <Mail size={16} className="inline mr-1" /> {p.email}
+                        </span>
+                      </div>
+                      <div className="carte-detail">
+                        <span className="carte-label">Matière:</span>
+                        <span>
+                          <BookOpen size={16} className="inline mr-1" /> {p.matiere || 'Non définie'}
                         </span>
                       </div>
                       <div className="carte-detail cours-detail">
@@ -825,6 +859,18 @@ setProfesseurs(professeurs.map(p => p._id === professeurAModifier._id ? response
               </div>
 
               <div className="form-group">
+                <label>Matière *</label>
+                <input
+                  type="text"
+                  name="matiere"
+                  placeholder="Matière enseignée"
+                  value={formAjout.matiere}
+                  onChange={handleChangeAjout}
+                  required
+                />
+              </div>
+
+              <div className="form-group">
                 <label>Cours (multi-sélection possible)</label>
                 <div className="cours-selection-container">
                   {listeCours.map((cours) => (
@@ -986,6 +1032,13 @@ setProfesseurs(professeurs.map(p => p._id === professeurAModifier._id ? response
               <Mail size={16} className="inline mr-1" /> {professeurSelectionne.email}
             </div>
           </div>
+
+          <div className="info-card">
+            <div className="info-label">Matière</div>
+            <div className="info-value">
+              <BookOpen size={16} className="inline mr-1" /> {professeurSelectionne.matiere || 'Non définie'}
+            </div>
+          </div>
         </div>
 
         <div className="cours-section">
@@ -1101,6 +1154,18 @@ setProfesseurs(professeurs.map(p => p._id === professeurAModifier._id ? response
           <small style={{color: '#666', fontSize: '12px'}}>
             Laisser vide pour conserver le mot de passe actuel
           </small>
+        </div>
+
+        <div className="form-group">
+          <label>Matière *</label>
+          <input
+            type="text"
+            name="matiere"
+            placeholder="Matière enseignée"
+            value={formModifier.matiere}
+            onChange={handleChangeModifier}
+            required
+          />
         </div>
 
         <div className="form-group">
