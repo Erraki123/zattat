@@ -4,6 +4,7 @@ import {
   GraduationCap,
   Home,
   User,
+  Clock,
   CheckCircle,
   CreditCard,
   Calendar,
@@ -13,8 +14,8 @@ import {
   X,
   Upload,
   BookOpen,
-    MessageCircle
-
+    MessageCircle,
+QrCode
 } from 'lucide-react';
 
 const SidebarEtudiant = ({ onLogout }) => {
@@ -70,7 +71,20 @@ const SidebarEtudiant = ({ onLogout }) => {
       path: '/etudiant/profile',
       label: 'Mon Profil',
       icon: User
+    }, {
+      path: '/etudiant/seances',
+      label: 'Mes Séances',
+      icon: Clock
+
     },
+  {
+      path: '/qr-etudiant',
+      label: 'Scanner QR',
+      icon: QrCode
+
+    },
+   
+
       {
       path: '/etudiant/messages',
       label: 'messages',

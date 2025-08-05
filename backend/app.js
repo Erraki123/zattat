@@ -5,12 +5,21 @@ require('dotenv').config();
 const Admin = require('./models/adminModel');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const fs = require('fs');
+const Actualite = require('./models/Actualite');
+
+const { NotificationSupprimee, Configuration } = require('./models/notificationModel');
+
+const ContactMessage = require('./models/contactModel');
+const Activity = require('./models/Activity');
+
 const Etudiant = require('./models/etudiantModel');
 const multer = require('multer');
 const path = require('path');
 const uploadMessageFile = require('./middlewares/uploadMessageFile');
 const Rappel = require('./models/RappelPaiement');
-
+const QrWeekPlanning = require('./models/QrWeekPlanning');
+const QrSession = require('./models/QrSession');
 const Cours = require('./models/coursModel');
 const Paiement = require('./models/paiementModel'); // تأكد أنك قمت بإنشاء الملف
 const Evenement = require('./models/evenementModel');
@@ -22,6 +31,7 @@ const authEtudiant = require('./middlewares/authEtudiant');
 const Document = require('./models/documentModel');
 const Exercice = require('./models/exerciceModel');
 const Message = require('./models/messageModel');
+const Seance = require('./models/Seance');
 
 const app = express();
 
@@ -96,6 +106,19 @@ const documentUpload = multer({
   }
 });
 const exerciceUpload = multer({ storage: storage }); // utiliser نفس multer
+const storageVieScolaire = multer.diskStorage({
+  destination: function (req, file, cb) {
+    const dir = path.join(__dirname, 'uploads/vieScolaire');
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+    cb(null, dir);
+  },
+  filename: function (req, file, cb) {
+    cb(null, Date.now() + '-' + file.originalname);
+  }
+});
+const uploadVieScolaire = multer({ storage: storageVieScolaire });
 
 // ✅ Inscription Admin
 app.post('/api/admin/register', async (req, res) => {
@@ -202,30 +225,69 @@ app.get('/api/etudiant/notifications', authEtudiant, async (req, res) => {
     const etudiant = await Etudiant.findById(req.etudiantId);
     const aujourdHui = new Date();
 
-    const paiements = await Paiement.find({ etudiant: req.etudiantId }).sort({ moisDebut: -1 });
+    const paiements = await Paiement.find({ etudiant: req.etudiantId });
 
-    const latestPaiementMap = new Map();
+    // Grouper les paiements par cours
+    const paiementsParCours = new Map();
 
     for (const p of paiements) {
-      if (!latestPaiementMap.has(p.cours)) {
-        latestPaiementMap.set(p.cours, p);
+      for (const nomCours of p.cours) {
+        if (!paiementsParCours.has(nomCours)) {
+          paiementsParCours.set(nomCours, []);
+        }
+        paiementsParCours.get(nomCours).push(p);
       }
     }
 
     const notifications = [];
 
-    for (const [cours, paiement] of latestPaiementMap.entries()) {
-      const debut = new Date(paiement.moisDebut);
-      const fin = new Date(debut);
-      fin.setMonth(fin.getMonth() + Number(paiement.nombreMois));
+    for (const [cours, paiementsCours] of paiementsParCours.entries()) {
+      // Construire les périodes {debut, fin} pour chaque paiement
+      const periodes = paiementsCours.map(p => {
+        const debut = new Date(p.moisDebut);
+        const fin = new Date(debut);
+        fin.setMonth(fin.getMonth() + p.nombreMois);
+        return { debut, fin };
+      });
 
-      const joursRestants = Math.ceil((fin - aujourdHui) / (1000 * 60 * 60 * 24));
+      // Trier les périodes par date de début
+      periodes.sort((a, b) => a.debut - b.debut);
 
-      if (joursRestants < 0) {
+      // Fusionner les périodes qui se chevauchent ou se suivent
+      const fusionnees = [];
+      let current = periodes[0];
+
+      for (let i = 1; i < periodes.length; i++) {
+        const next = periodes[i];
+        if (next.debut <= current.fin) {
+          // Chevauchement ou continuité
+          current.fin = new Date(Math.max(current.fin.getTime(), next.fin.getTime()));
+        } else {
+          fusionnees.push(current);
+          current = next;
+        }
+      }
+      fusionnees.push(current);
+
+      // Vérifier si aujourd'hui est dans une des périodes fusionnées
+      let estActif = false;
+      let joursRestants = null;
+
+      for (const periode of fusionnees) {
+        if (aujourdHui >= periode.debut && aujourdHui <= periode.fin) {
+          estActif = true;
+          joursRestants = Math.ceil((periode.fin - aujourdHui) / (1000 * 60 * 60 * 24));
+          break;
+        }
+      }
+
+      if (!estActif) {
+        const derniereFin = fusionnees[fusionnees.length - 1].fin;
+        const joursDepuis = Math.ceil((aujourdHui - derniereFin) / (1000 * 60 * 60 * 24));
         notifications.push({
           type: 'paiement_expire',
           cours,
-          message: `💰 Le paiement pour le cours "${cours}" a expiré depuis ${Math.abs(joursRestants)} jour(s).`
+          message: `💰 Le paiement pour le cours "${cours}" a expiré depuis ${joursDepuis} jour(s).`
         });
       } else if (joursRestants <= 2) {
         notifications.push({
@@ -319,6 +381,232 @@ app.get('/api/etudiants', authAdmin, async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+// 📌 توليد QR - فقط من طرف الأدمين
+// ✅ Nouveau endpoint pour générer le QR d'une seule journée
+
+app.post('/api/admin/qr-day-generate', async (req, res) => {
+  try {
+    const { date } = req.body;
+    if (!date) return res.status(400).json({ message: '❌ التاريخ مفقود' });
+
+    const jours = ['dimanche', 'lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi'];
+    const jourNom = jours[new Date(date).getDay()];
+
+    const QrSession = require('./models/QrSession');
+    const QrWeekPlanning = require('./models/QrWeekPlanning');
+    const Etudiant = require('./models/etudiantModel');
+    const Presence = require('./models/presenceModel');
+
+    // 🗑️ Supprimer toutes les sessions et présences du même jour
+    await QrSession.deleteMany({ date });
+    await Presence.deleteMany({ dateSession: date });
+
+    // 🔍 Récupérer les sessions de ce jour
+    const sessions = await QrWeekPlanning.find({ jour: jourNom });
+
+    const qrSessions = [];
+
+    for (const s of sessions) {
+      if (!s.periode || !s.horaire) {
+        return res.status(400).json({ message: `❌ Session invalide: période ou horaire manquant (cours: ${s.cours})` });
+      }
+
+      const currentPeriode = s.periode; // ❗ NE PAS raccourcir la période
+
+      // ✅ Créer la session QR
+      const newSession = await QrSession.create({
+        date,
+        periode: currentPeriode, // garder matin1, matin2, soir1, soir2...
+        cours: s.cours,
+        professeur: s.professeur,
+        matiere: s.matiere,
+        horaire: s.horaire
+      });
+
+      // ✅ Créer les présences par défaut pour tous les étudiants
+      const etudiants = await Etudiant.find({ cours: s.cours });
+      for (const etu of etudiants) {
+        await Presence.create({
+          etudiant: etu._id,
+          cours: s.cours,
+          dateSession: date,
+          periode: currentPeriode,
+          heure: s.horaire,
+          matiere: s.matiere,
+          present: false,
+          creePar: s.professeur,
+          nomProfesseur: ''
+        });
+      }
+
+      // Ajouter à la réponse
+      qrSessions.push({
+        date,
+        periode: currentPeriode,
+        cours: s.cours,
+        professeur: s.professeur,
+        matiere: s.matiere,
+        jour: jourNom,
+        horaire: s.horaire
+      });
+    }
+
+    res.status(200).json({
+      type: 'qr-day',
+      date,
+      jour: jourNom,
+      qrSessions
+    });
+
+  } catch (err) {
+    console.error('❌ Erreur generation QR day:', err);
+    res.status(500).json({ message: '❌ Erreur serveur lors de la génération du QR Day' });
+  }
+});
+
+
+app.post('/api/presence/qr/generate', authAdmin, async (req, res) => {
+  try {
+    const { classe, professeurId, matiere, horaire } = req.body;
+
+    if (!classe || !professeurId || !horaire) {
+      return res.status(400).json({ message: '❌ Classe, professeur et horaire sont requis' });
+    }
+
+    const now = new Date();
+    const date = now.toISOString().split('T')[0];
+    const hour = now.getHours();
+    const periode = hour < 12 ? 'matin' : 'soir';
+
+    // 🗑️ حذف الجلسة القديمة إن وجدت
+    await QrSession.deleteOne({ date, periode, cours: classe });
+
+    // ✅ إنشاء جلسة جديدة بـ البيانات الكاملة
+    const session = new QrSession({
+      date,
+      periode,
+      cours: classe,            // يجب أن يكون `cours`
+      professeur: professeurId,
+      matiere: matiere || '',
+      horaire
+    });
+
+    await session.save();
+
+    const qrPayload = JSON.stringify({
+      date,
+      periode,
+      cours: classe,
+      professeur: professeurId,
+      matiere,
+      horaire
+    });
+
+    res.status(200).json({
+      qrData: qrPayload,
+      payload: {
+        date,
+        periode,
+        cours: classe,
+        professeur: professeurId,
+        matiere,
+        horaire
+      }
+    });
+
+  } catch (err) {
+    console.error('❌ Erreur dans qr/generate:', err);
+    res.status(500).json({ message: '❌ Erreur serveur lors de la génération du QR' });
+  }
+});
+// ✅ /api/admin/save-week-planning
+app.post('/api/admin/save-week-planning', async (req, res) => {
+  const { planning } = req.body;
+  try {
+    for (const entry of planning) {
+      await QrWeekPlanning.findOneAndUpdate(
+        {
+          jour: entry.jour,
+          cours: entry.cours,
+          periode: entry.periode,
+          horaire: entry.horaire  // ✅ أضف التوقيت لتمييز الجلسات
+        },
+        entry,
+        { upsert: true, new: true }
+      );
+    }
+    res.status(200).json({ message: '✅ Planning sauvegardé avec succès' });
+  } catch (err) {
+    console.error('❌ Erreur sauvegarde planning:', err);
+    res.status(500).json({ message: '❌ Erreur lors de la sauvegarde' });
+  }
+});
+
+
+
+
+
+// ✅ route: GET /api/admin/qr-week
+app.get('/api/admin/qr-week', authAdmin, async (req, res) => {
+  try {
+    const plannings = await require('./models/QrWeekPlanning')
+      .find()
+      .populate('professeur', 'nom'); // فقط الاسم
+
+    res.status(200).json(plannings);
+  } catch (err) {
+    console.error('❌ Erreur lors de récupération de QrWeekPlanning:', err);
+    res.status(500).json({ message: 'Erreur serveur' });
+  }
+});
+
+app.post('/api/admin/fill-week', async (req, res) => {
+  try {
+    const jours = ['lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi'];
+    const periodes = ['matin', 'soir'];
+    const Cours = require('./models/coursModel');
+const Professeur = require('./models/professeurModel');
+
+    const QrWeekPlanning = require('./models/QrWeekPlanning');
+
+    const coursList = await Cours.find();
+
+    let count = 0;
+    for (const cours of coursList) {
+      const profNames = Array.isArray(cours.professeur) ? cours.professeur : [cours.professeur];
+
+      // جلب ObjectId لأول أستاذ في القائمة
+      const profDoc = await Professeur.findOne({ nom: profNames[0] });
+      if (!profDoc) continue; // تجاهل الدورة إن لم يوجد الأستاذ
+
+      for (const jour of jours) {
+        for (const periode of periodes) {
+          const existe = await QrWeekPlanning.findOne({ jour, periode, cours: cours.nom });
+          if (!existe) {
+            const plan = new QrWeekPlanning({
+              jour,
+              periode,
+              cours: cours.nom,
+              professeur: profDoc._id, // ✅ هنا استخدم الـ ObjectId الصحيح
+              matiere: cours.nom
+            });
+            await plan.save();
+            count++;
+          }
+        }
+      }
+    }
+
+    res.status(200).json({ message: `✅ ${count} تخطيط أسبوعي تم إدخاله بنجاح` });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: '❌ خطأ في ملء جدول الأسبوع' });
+  }
+});
+
+
+
+
 
 app.post('/api/cours', authAdmin, async (req, res) => {
   try {
@@ -511,6 +799,49 @@ app.get('/api/evenements/:id', authAdmin, async (req, res) => {
     });
   }
 });
+app.post('/api/qr-session/complete', authProfesseur, async (req, res) => {
+  const { cours, dateSession, heure, periode, matiere, nomProfesseur } = req.body;
+
+  try {
+    // 🧑‍🎓 جلب كل الطلبة في هذا القسم
+    const etudiants = await Etudiant.find({ cours });
+
+    // ✅ جلب الحضور الموجود فعلاً (أي الذين قاموا بمسح الـ QR)
+    const presencesExistantes = await Presence.find({
+      cours,
+      dateSession: new Date(dateSession),
+      heure,
+      periode
+    });
+
+    const idsDejaPresents = presencesExistantes.map(p => String(p.etudiant));
+
+    // 🟥 استخراج الطلبة الذين لم يحضروا
+    const absents = etudiants.filter(e => !idsDejaPresents.includes(String(e._id)));
+
+    // 🔁 تسجيل كل طالب كغائب
+    for (let etu of absents) {
+      await Presence.create({
+        etudiant: etu._id,
+        cours,
+        dateSession: new Date(dateSession),
+        present: false,
+        creePar: req.professeurId,
+        heure,
+        periode,
+        matiere,
+        nomProfesseur
+      });
+    }
+
+    res.json({ message: `✅ تم تسجيل الغياب: ${absents.length} طالب غائب` });
+
+  } catch (err) {
+    console.error('❌ خطأ:', err);
+    res.status(500).json({ error: '❌ خطأ في الخادم أثناء إكمال الحضور' });
+  }
+});
+
 app.get('/api/professeur/presences', authProfesseur, async (req, res) => {
   const data = await Presence.find({ creePar: req.professeurId }).populate('etudiant', 'nomComplet');
   res.json(data);
@@ -621,216 +952,7 @@ app.post('/api/presences', authProfesseur, async (req, res) => {
 // ✅ Route pour récupérer toutes les notifications
 // 🔧 API de notifications corrigée avec debug
 
-app.get('/api/notifications', authAdmin, async (req, res) => {
-  try {
-    const notifications = [];
-    const aujourdHui = new Date();
-    
-    console.log("🔍 Début génération notifications:", aujourdHui);
-    
-    // 1. 🔴 Paiements expirés et expirant bientôt
-    const paiements = await Paiement.find()
-      .populate('etudiant', 'nomComplet actif')
-      .sort({ moisDebut: -1 });
 
-    console.log("💰 Paiements trouvés:", paiements.length);
-
-    // Grouper par étudiant+cours pour avoir le dernier paiement
-    const latestPaiementMap = new Map();
-    for (const p of paiements) {
-      const key = `${p.etudiant?._id}_${p.cours}`;
-      if (!latestPaiementMap.has(key)) {
-        latestPaiementMap.set(key, p);
-      }
-    }
-
-    for (const paiement of latestPaiementMap.values()) {
-      if (!paiement.etudiant?.actif) continue;
-
-      const debut = new Date(paiement.moisDebut);
-      const fin = new Date(debut);
-      fin.setMonth(fin.getMonth() + Number(paiement.nombreMois));
-      
-      const joursRestants = Math.ceil((fin - aujourdHui) / (1000 * 60 * 60 * 24));
-
-      if (joursRestants < 0) {
-        // Paiement expiré
-        notifications.push({
-          id: `payment_expired_${paiement._id}`,
-          type: 'payment_expired',
-          title: 'Paiement expiré',
-          message: `Le paiement de ${paiement.etudiant.nomComplet} a expiré il y a ${Math.abs(joursRestants)} jour(s)`,
-          priority: 'urgent',
-          timestamp: fin,
-          data: {
-            etudiantId: paiement.etudiant._id,
-            etudiantNom: paiement.etudiant.nomComplet,
-            cours: paiement.cours,
-            joursExpires: Math.abs(joursRestants)
-          }
-        });
-      } else if (joursRestants <= 7) {
-        // Paiement expirant bientôt
-        notifications.push({
-          id: `payment_expiring_${paiement._id}`,
-          type: 'payment_expiring',
-          title: 'Paiement expirant bientôt',
-          message: `Le paiement de ${paiement.etudiant.nomComplet} expire dans ${joursRestants} jour(s)`,
-          priority: joursRestants <= 3 ? 'high' : 'medium',
-          timestamp: fin,
-          data: {
-            etudiantId: paiement.etudiant._id,
-            etudiantNom: paiement.etudiant.nomComplet,
-            cours: paiement.cours,
-            joursRestants
-          }
-        });
-      }
-    }
-
-    // 2. 🟡 Absences répétées (plus de 3 absences ce mois-ci) - VERSION CORRIGÉE
-    const debutMois = new Date(aujourdHui.getFullYear(), aujourdHui.getMonth(), 1);
-    const finMois = new Date(aujourdHui.getFullYear(), aujourdHui.getMonth() + 1, 0);
-
-    console.log("📅 Recherche absences entre:", debutMois, "et", finMois);
-
-    // CORRECTION: Chercher toutes les absences du mois, peu importe le cours
-    const presences = await Presence.find({
-      dateSession: { $gte: debutMois, $lte: finMois },
-      present: false
-    }).populate('etudiant', 'nomComplet actif');
-
-    console.log("📊 Présences (absences) trouvées:", presences.length);
-
-    // Debug: Afficher toutes les absences trouvées
-    for (const presence of presences) {
-      console.log(`- ${presence.etudiant?.nomComplet || 'UNKNOWN'} absent le ${presence.dateSession.toISOString().split('T')[0]} en ${presence.cours}`);
-    }
-
-    // Compter les absences par étudiant
-    const absencesParEtudiant = {};
-    for (const presence of presences) {
-      if (!presence.etudiant) {
-        console.log("⚠️ Présence sans étudiant:", presence._id);
-        continue;
-      }
-      
-      if (!presence.etudiant.actif) {
-        console.log("⚠️ Étudiant inactif:", presence.etudiant.nomComplet);
-        continue;
-      }
-      
-      const etudiantId = presence.etudiant._id.toString();
-      if (!absencesParEtudiant[etudiantId]) {
-        absencesParEtudiant[etudiantId] = {
-          etudiant: presence.etudiant,
-          count: 0,
-          cours: new Set()
-        };
-      }
-      absencesParEtudiant[etudiantId].count++;
-      absencesParEtudiant[etudiantId].cours.add(presence.cours);
-      
-      console.log(`✅ Absence comptée: ${presence.etudiant.nomComplet} - Total: ${absencesParEtudiant[etudiantId].count}`);
-    }
-
-    console.log("📈 Résumé des absences par étudiant:");
-    for (const [etudiantId, data] of Object.entries(absencesParEtudiant)) {
-      console.log(`- ${data.etudiant.nomComplet}: ${data.count} absences en ${Array.from(data.cours).join(', ')}`);
-      
-      if (data.count >= 3) {
-        console.log(`🚨 GÉNÉRATION NOTIFICATION pour ${data.etudiant.nomComplet}`);
-        
-        notifications.push({
-          id: `absence_frequent_${etudiantId}`,
-          type: 'absence_frequent',
-          title: 'Absences répétées',
-          message: `${data.etudiant.nomComplet} a été absent(e) ${data.count} fois ce mois`,
-          priority: data.count >= 5 ? 'high' : 'medium',
-          timestamp: new Date(),
-          data: {
-            etudiantId,
-            etudiantNom: data.etudiant.nomComplet,
-            nombreAbsences: data.count,
-            cours: Array.from(data.cours)
-          }
-        });
-      }
-    }
-
-    // 3. 📅 Événements à venir (dans les 7 prochains jours)
-    const dans7jours = new Date();
-    dans7jours.setDate(dans7jours.getDate() + 7);
-
-    const evenements = await Evenement.find({
-      dateDebut: { $gte: aujourdHui, $lte: dans7jours }
-    }).sort({ dateDebut: 1 });
-
-    console.log("📅 Événements à venir:", evenements.length);
-
-    for (const evenement of evenements) {
-      const joursRestants = Math.ceil((new Date(evenement.dateDebut) - aujourdHui) / (1000 * 60 * 60 * 24));
-      
-      let priorite = 'medium';
-      if (joursRestants === 0) priorite = 'urgent'; // Aujourd'hui
-      else if (joursRestants === 1) priorite = 'high'; // Demain
-
-      notifications.push({
-        id: `event_upcoming_${evenement._id}`,
-        type: 'event_upcoming',
-        title: `${evenement.type} programmé`,
-        message: joursRestants === 0 
-          ? `${evenement.titre} prévu aujourd'hui`
-          : `${evenement.titre} prévu dans ${joursRestants} jour(s)`,
-        priority: priorite,
-        timestamp: evenement.dateDebut,
-        data: {
-          evenementId: evenement._id,
-          titre: evenement.titre,
-          type: evenement.type,
-          dateDebut: evenement.dateDebut,
-          joursRestants
-        }
-      });
-    }
-
-    // Trier par priorité puis par date
-    const priorityOrder = { urgent: 4, high: 3, medium: 2, low: 1 };
-    notifications.sort((a, b) => {
-      const priorityDiff = priorityOrder[b.priority] - priorityOrder[a.priority];
-      if (priorityDiff !== 0) return priorityDiff;
-      return new Date(b.timestamp) - new Date(a.timestamp);
-    });
-
-    console.log("🎯 Notifications générées:", notifications.length);
-    console.log("- Urgent:", notifications.filter(n => n.priority === 'urgent').length);
-    console.log("- High:", notifications.filter(n => n.priority === 'high').length);
-    console.log("- Medium:", notifications.filter(n => n.priority === 'medium').length);
-
-    res.json({
-      notifications,
-      total: notifications.length,
-      urgent: notifications.filter(n => n.priority === 'urgent').length,
-      high: notifications.filter(n => n.priority === 'high').length,
-      medium: notifications.filter(n => n.priority === 'medium').length,
-      debug: {
-        debutMois: debutMois.toISOString(),
-        finMois: finMois.toISOString(),
-        presencesTotales: presences.length,
-        absencesParEtudiant: Object.fromEntries(
-          Object.entries(absencesParEtudiant).map(([id, data]) => [
-            data.etudiant.nomComplet, 
-            { count: data.count, cours: Array.from(data.cours) }
-          ])
-        )
-      }
-    });
-
-  } catch (err) {
-    console.error('❌ Erreur notifications:', err);
-    res.status(500).json({ error: err.message, stack: err.stack });
-  }
-});
 
 // 🔧 Route de débogage spéciale
 app.get('/api/debug/notifications', authAdmin, async (req, res) => {
@@ -1219,203 +1341,7 @@ app.delete('/api/notifications/:id', authAdmin, async (req, res) => {
 });
 
 // ✅ Modifier la route GET notifications pour exclure les notifications supprimées
-app.get('/api/notifications', authAdmin, async (req, res) => {
-  try {
-    const notifications = [];
-    const aujourdHui = new Date();
-    
-    console.log("🔍 Début génération notifications:", aujourdHui);
-    
-    // Initialiser la liste des notifications supprimées si elle n'existe pas
-    if (!global.deletedNotifications) {
-      global.deletedNotifications = new Set();
-    }
-    
-    // 1. 🔴 Paiements expirés et expirant bientôt
-    const paiements = await Paiement.find()
-      .populate('etudiant', 'nomComplet actif')
-      .sort({ moisDebut: -1 });
 
-    console.log("💰 Paiements trouvés:", paiements.length);
-
-    // Grouper par étudiant+cours pour avoir le dernier paiement
-    const latestPaiementMap = new Map();
-    for (const p of paiements) {
-      const key = `${p.etudiant?._id}_${p.cours}`;
-      if (!latestPaiementMap.has(key)) {
-        latestPaiementMap.set(key, p);
-      }
-    }
-
-    for (const paiement of latestPaiementMap.values()) {
-      if (!paiement.etudiant?.actif) continue;
-
-      const debut = new Date(paiement.moisDebut);
-      const fin = new Date(debut);
-      fin.setMonth(fin.getMonth() + Number(paiement.nombreMois));
-      
-      const joursRestants = Math.ceil((fin - aujourdHui) / (1000 * 60 * 60 * 24));
-
-      let notificationId, type, title, message, priority;
-
-      if (joursRestants < 0) {
-        // Paiement expiré
-        notificationId = `payment_expired_${paiement._id}`;
-        type = 'payment_expired';
-        title = 'Paiement expiré';
-        message = `Le paiement de ${paiement.etudiant.nomComplet} a expiré il y a ${Math.abs(joursRestants)} jour(s)`;
-        priority = 'urgent';
-      } else if (joursRestants <= 7) {
-        // Paiement expirant bientôt
-        notificationId = `payment_expiring_${paiement._id}`;
-        type = 'payment_expiring';
-        title = 'Paiement expirant bientôt';
-        message = `Le paiement de ${paiement.etudiant.nomComplet} expire dans ${joursRestants} jour(s)`;
-        priority = joursRestants <= 3 ? 'high' : 'medium';
-      }
-
-      // Vérifier si cette notification n'a pas été supprimée
-      if (notificationId && !global.deletedNotifications.has(notificationId)) {
-        notifications.push({
-          id: notificationId,
-          type: type,
-          title: title,
-          message: message,
-          priority: priority,
-          timestamp: fin,
-          data: {
-            etudiantId: paiement.etudiant._id,
-            etudiantNom: paiement.etudiant.nomComplet,
-            cours: paiement.cours,
-            joursRestants: joursRestants < 0 ? Math.abs(joursRestants) : joursRestants
-          }
-        });
-      }
-    }
-
-    // 2. 🟡 Absences répétées (plus de 3 absences ce mois-ci)
-    const debutMois = new Date(aujourdHui.getFullYear(), aujourdHui.getMonth(), 1);
-    const finMois = new Date(aujourdHui.getFullYear(), aujourdHui.getMonth() + 1, 0);
-
-    console.log("📅 Recherche absences entre:", debutMois, "et", finMois);
-
-    const presences = await Presence.find({
-      dateSession: { $gte: debutMois, $lte: finMois },
-      present: false
-    }).populate('etudiant', 'nomComplet actif');
-
-    console.log("📊 Présences (absences) trouvées:", presences.length);
-
-    // Compter les absences par étudiant
-    const absencesParEtudiant = {};
-    for (const presence of presences) {
-      if (!presence.etudiant || !presence.etudiant.actif) continue;
-      
-      const etudiantId = presence.etudiant._id.toString();
-      if (!absencesParEtudiant[etudiantId]) {
-        absencesParEtudiant[etudiantId] = {
-          etudiant: presence.etudiant,
-          count: 0,
-          cours: new Set()
-        };
-      }
-      absencesParEtudiant[etudiantId].count++;
-      absencesParEtudiant[etudiantId].cours.add(presence.cours);
-    }
-
-    for (const [etudiantId, data] of Object.entries(absencesParEtudiant)) {
-      if (data.count >= 3) {
-        const notificationId = `absence_frequent_${etudiantId}`;
-        
-        // Vérifier si cette notification n'a pas été supprimée
-        if (!global.deletedNotifications.has(notificationId)) {
-          notifications.push({
-            id: notificationId,
-            type: 'absence_frequent',
-            title: 'Absences répétées',
-            message: `${data.etudiant.nomComplet} a été absent(e) ${data.count} fois ce mois`,
-            priority: data.count >= 5 ? 'high' : 'medium',
-            timestamp: new Date(),
-            data: {
-              etudiantId,
-              etudiantNom: data.etudiant.nomComplet,
-              nombreAbsences: data.count,
-              cours: Array.from(data.cours)
-            }
-          });
-        }
-      }
-    }
-
-    // 3. 📅 Événements à venir (dans les 7 prochains jours)
-    const dans7jours = new Date();
-    dans7jours.setDate(dans7jours.getDate() + 7);
-
-    const evenements = await Evenement.find({
-      dateDebut: { $gte: aujourdHui, $lte: dans7jours }
-    }).sort({ dateDebut: 1 });
-
-    console.log("📅 Événements à venir:", evenements.length);
-
-    for (const evenement of evenements) {
-      const joursRestants = Math.ceil((new Date(evenement.dateDebut) - aujourdHui) / (1000 * 60 * 60 * 24));
-      
-      let priorite = 'medium';
-      if (joursRestants === 0) priorite = 'urgent'; // Aujourd'hui
-      else if (joursRestants === 1) priorite = 'high'; // Demain
-
-      const notificationId = `event_upcoming_${evenement._id}`;
-      
-      // Vérifier si cette notification n'a pas été supprimée
-      if (!global.deletedNotifications.has(notificationId)) {
-        notifications.push({
-          id: notificationId,
-          type: 'event_upcoming',
-          title: `${evenement.type} programmé`,
-          message: joursRestants === 0 
-            ? `${evenement.titre} prévu aujourd'hui`
-            : `${evenement.titre} prévu dans ${joursRestants} jour(s)`,
-          priority: priorite,
-          timestamp: evenement.dateDebut,
-          data: {
-            evenementId: evenement._id,
-            titre: evenement.titre,
-            type: evenement.type,
-            dateDebut: evenement.dateDebut,
-            joursRestants
-          }
-        });
-      }
-    }
-
-    // Trier par priorité puis par date
-    const priorityOrder = { urgent: 4, high: 3, medium: 2, low: 1 };
-    notifications.sort((a, b) => {
-      const priorityDiff = priorityOrder[b.priority] - priorityOrder[a.priority];
-      if (priorityDiff !== 0) return priorityDiff;
-      return new Date(b.timestamp) - new Date(a.timestamp);
-    });
-
-    console.log("🎯 Notifications générées:", notifications.length);
-    console.log("🗑️ Notifications supprimées:", global.deletedNotifications.size);
-    console.log("- Urgent:", notifications.filter(n => n.priority === 'urgent').length);
-    console.log("- High:", notifications.filter(n => n.priority === 'high').length);
-    console.log("- Medium:", notifications.filter(n => n.priority === 'medium').length);
-
-    res.json({
-      notifications,
-      total: notifications.length,
-      urgent: notifications.filter(n => n.priority === 'urgent').length,
-      high: notifications.filter(n => n.priority === 'high').length,
-      medium: notifications.filter(n => n.priority === 'medium').length,
-      deletedCount: global.deletedNotifications.size
-    });
-
-  } catch (err) {
-    console.error('❌ Erreur notifications:', err);
-    res.status(500).json({ error: err.message, stack: err.stack });
-  }
-});
 // 🔒 GET /api/professeur/exercices/:cours
 app.get('/api/professeur/exercices/:cours', authProfesseur, async (req, res) => {
   try {
@@ -1505,28 +1431,279 @@ app.delete('/api/cours/:id', authAdmin, async (req, res) => {
 
 
 // ✅ Route pour vider la liste des notifications supprimées (optionnel - pour admin)
-app.post('/api/notifications/reset-deleted', authAdmin, (req, res) => {
-  try {
-    const oldCount = global.deletedNotifications ? global.deletedNotifications.size : 0;
-    global.deletedNotifications = new Set();
-    
-    console.log("🔄 Liste des notifications supprimées réinitialisée");
-    console.log(`📊 ${oldCount} notifications supprimées ont été restaurées`);
-    
-    res.json({ 
-      message: 'Liste des notifications supprimées réinitialisée',
-      restoredCount: oldCount,
-      success: true
-    });
 
+app.post('/api/contact/send', async (req, res) => {
+  try {
+    const newMessage = new ContactMessage(req.body);
+    await newMessage.save();
+    res.status(201).json({ message: '✅ Message envoyé avec succès' });
   } catch (err) {
-    console.error('❌ Erreur reset notifications:', err);
-    res.status(500).json({ 
-      error: 'Erreur lors de la réinitialisation',
-      details: err.message 
-    });
+    console.error('❌ Erreur enregistrement message:', err);
+    res.status(500).json({ message: '❌ Erreur serveur' });
   }
 });
+
+// 🔐 Route protégée - vue admin
+app.get('/api/admin/contact-messages', authAdmin, async (req, res) => {
+  try {
+    const messages = await ContactMessage.find().sort({ date: -1 });
+    res.status(200).json(messages);
+  } catch (err) {
+    console.error('❌ Erreur récupération messages:', err);
+    res.status(500).json({ message: '❌ Erreur serveur' });
+  }
+});
+app.delete('/api/admin/contact-messages/:id', authAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const deleted = await ContactMessage.findByIdAndDelete(id);
+    if (!deleted) {
+      return res.status(404).json({ message: '❌ Message non trouvé' });
+    }
+
+    res.status(200).json({ message: '✅ Message supprimé avec succès' });
+  } catch (error) {
+    console.error('❌ Erreur suppression message:', error);
+    res.status(500).json({ message: '❌ Erreur serveur' });
+  }
+});
+
+app.post('/api/admin/qr-week-bulk', async (req, res) => {
+  try {
+    const { planning } = req.body;
+
+    if (!Array.isArray(planning) || planning.length === 0) {
+      return res.status(400).json({ message: 'Données de planning manquantes' });
+    }
+
+    const results = [];
+
+    for (const item of planning) {
+      const { jour, periode, cours, matiere, professeur, horaire } = item;
+
+      // ✅ Vérifie que tout est bien fourni, y compris `horaire`
+      if (!jour || !periode || !cours || !matiere || !professeur || !horaire) {
+        continue; // Ignore les lignes incomplètes
+      }
+
+      const existe = await QrWeekPlanning.findOne({
+        jour,
+        periode,
+        cours,
+      });
+
+      if (existe) {
+        existe.matiere = matiere;
+        existe.professeur = professeur;
+        existe.horaire = horaire; // ✅ met à jour aussi l’horaire
+        await existe.save();
+        results.push({ updated: existe._id });
+      } else {
+        const nouv = new QrWeekPlanning({
+          jour,
+          periode,
+          cours,
+          matiere,
+          professeur,
+          horaire // ✅ nouveau champ
+        });
+        await nouv.save();
+        results.push({ created: nouv._id });
+      }
+    }
+
+    res.status(201).json({ message: '✅ Planning enregistré avec succès', details: results });
+  } catch (err) {
+    console.error('❌ Erreur bulk qr-week:', err);
+    res.status(500).json({ message: '❌ Erreur serveur lors de l’enregistrement du planning' });
+  }
+});
+
+
+app.post('/api/qretudiant', authEtudiant, async (req, res) => {
+  try {
+    const etudiant = req.user;
+
+    const niveau = Array.isArray(etudiant.cours) ? etudiant.cours[0] : etudiant.cours;
+
+    const { date, periode } = req.body;
+
+    if (!date || !periode) {
+      return res.status(400).json({ message: 'Date et période requises' });
+    }
+
+    const session = await QrSession.findOne({
+      date,
+      periode,
+      cours: niveau // المقارنة هنا حسب أول مستوى فقط
+    });
+
+    if (!session) {
+      return res.status(404).json({ message: 'Aucune session trouvée pour ce niveau' });
+    }
+
+    res.status(200).json({ message: 'Session trouvée', session });
+
+  } catch (err) {
+    console.error('Erreur dans /api/qretudiant:', err);
+    res.status(500).json({ message: 'Erreur serveur' });
+  }
+});
+
+// backend/app.js ou routes/admin.js
+
+app.post('/api/etudiant/qr-presence', authEtudiant, async (req, res) => {
+  try {
+    const { date, periode, cours, horaire } = req.body;
+
+    // ✅ تحقق من المعطيات الأساسية
+    if (!date || !periode || !cours || !horaire) {
+      return res.status(400).json({ message: '❌ QR invalide - données manquantes' });
+    }
+
+    const now = new Date();
+    const heureActuelle = now.toTimeString().slice(0, 5); // "14:25"
+
+    // ✅ ابحث عن الجلسة في QrSession
+    const session = await QrSession.findOne({ date, periode, cours, horaire }).populate('professeur');
+
+    if (!session) {
+      return res.status(404).json({ message: '❌ QR session non trouvée pour ce cours et horaire' });
+    }
+
+    // ✅ تحقق أن التوقيت الحالي داخل النافذة الزمنية
+    const [startHour, endHour] = horaire.split('-'); // Exemple: '08:00', '10:00'
+    if (heureActuelle < startHour || heureActuelle > endHour) {
+      return res.status(400).json({
+        message: `⛔ Vous êtes hors de la plage horaire autorisée (${horaire})`
+      });
+    }
+
+    // ✅ تحقق من الطالب
+    const etudiant = await Etudiant.findById(req.etudiantId);
+    if (!etudiant) return res.status(404).json({ message: '❌ Étudiant introuvable' });
+
+    const niveauEtudiant = Array.isArray(etudiant.cours) ? etudiant.cours[0] : etudiant.cours;
+    if (!niveauEtudiant || niveauEtudiant !== cours) {
+      return res.status(403).json({ message: `❌ Ce QR n'est pas destiné à votre niveau (${cours})` });
+    }
+
+    // ✅ تحقق من عدم تكرار الحضور في نفس التوقيت
+    const dejaPresente = await Presence.findOne({
+      etudiant: etudiant._id,
+      cours: niveauEtudiant,
+      dateSession: date,
+      periode,
+      heure: horaire // لازم تبحث بنفس `horaire`!
+    });
+
+    if (dejaPresente) {
+      return res.status(400).json({ message: '⚠️ Présence déjà enregistrée pour ce créneau horaire' });
+    }
+
+    // ✅ إنشاء الحضور
+    const presence = new Presence({
+      etudiant: etudiant._id,
+      cours: niveauEtudiant,
+      dateSession: date,
+      periode,
+heure: horaire, // ✅ استخدم التوقيت الرسمي للجلسة
+      present: true,
+      remarque: 'QR auto',
+      matiere: session.matiere || 'Non spécifiée',
+      nomProfesseur: session.professeur?.nom || session.professeur?.nomComplet || 'Non spécifié',
+      creePar: session.professeur?._id || null
+    });
+
+    await presence.save();
+
+    res.status(201).json({ message: '✅ Présence enregistrée avec succès', presence });
+
+  } catch (error) {
+    console.error('❌ Erreur dans qr-presence:', error);
+    res.status(500).json({ message: '❌ Erreur serveur' });
+  }
+});
+
+
+// ✅ Route: Supprimer toutes les QR sessions d'un jour donné
+app.delete('/api/admin/qr-day-delete', authAdmin, async (req, res) => {
+  try {
+    const { date } = req.body;
+    if (!date) {
+      return res.status(400).json({ message: '❌ Date requise pour supprimer les sessions QR' });
+    }
+
+    // ✅ Supprimer les sessions QR de ce jour
+    const deleted = await QrSession.deleteMany({ date });
+
+    // (Optionnel) Supprimer aussi les présences associées à ce jour
+    // await Presence.deleteMany({ dateSession: date });
+
+    res.status(200).json({ message: `✅ ${deleted.deletedCount} sessions QR supprimées pour ${date}` });
+  } catch (error) {
+    console.error('❌ Erreur lors de la suppression des QR sessions:', error);
+    res.status(500).json({ message: '❌ Erreur serveur lors de la suppression' });
+  }
+});
+
+// ✅ Route: Récupérer toutes les sessions QR planifiées pour une date donnée
+app.get('/api/admin/qr-day-sessions', authAdmin, async (req, res) => {
+  try {
+    const { date } = req.query;
+    if (!date) {
+      return res.status(400).json({ message: '❌ Date requise pour obtenir les sessions' });
+    }
+
+    const qrSessions = await QrSession.find({ date }).populate('professeur');
+    res.status(200).json({ qrSessions });
+  } catch (error) {
+    console.error('❌ Erreur lors de la récupération des sessions QR:', error);
+    res.status(500).json({ message: '❌ Erreur serveur' });
+  }
+});
+
+// Modifier une session individuelle
+app.put('/api/admin/qr-session/:id', authAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { matiere, professeur, periode, horaire } = req.body;
+    
+    const session = await QrSession.findByIdAndUpdate(id, {
+      matiere,
+      professeur,
+      periode,
+      horaire
+    }, { new: true });
+    
+    if (!session) {
+      return res.status(404).json({ message: 'Session non trouvée' });
+    }
+    
+    res.json({ message: 'Session modifiée avec succès', session });
+  } catch (error) {
+    res.status(500).json({ message: 'Erreur serveur' });
+  }
+});
+
+// Supprimer une session individuelle
+app.delete('/api/admin/qr-session/:id', authAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const session = await QrSession.findByIdAndDelete(id);
+    
+    if (!session) {
+      return res.status(404).json({ message: 'Session non trouvée' });
+    }
+    
+    res.json({ message: 'Session supprimée avec succès' });
+  } catch (error) {
+    res.status(500).json({ message: 'Erreur serveur' });
+  }
+});
+
+
 // 🔔 إشعارات الأستاذ - الأحداث القادمة فقط
 app.get('/api/professeur/notifications', authProfesseur, async (req, res) => {
   try {
@@ -1584,58 +1761,201 @@ app.get('/api/notifications/deleted', authAdmin, (req, res) => {
 // accessible uniquement par Admin
 app.post('/api/professeurs', authAdmin, upload.single('image'), async (req, res) => {
   try {
-    const { nom, email, motDePasse, cours, telephone, dateNaissance, actif, genre, matiere } = req.body;
+    const {
+      nom,
+      email,
+      motDePasse,
+      cours,
+      telephone,
+      dateNaissance,
+      actif,
+      genre,
+      matiere
+    } = req.body;
 
-    // 🔐 تحقق من التكرار
+    // 🔐 Vérification email unique
     const existe = await Professeur.findOne({ email });
-    if (existe) return res.status(400).json({ message: '📧 هذا البريد مستخدم من قبل' });
+    if (existe) return res.status(400).json({ message: '📧 Cet email est déjà utilisé' });
 
-    // ✅ تحقق من genre صالح
+    // ✅ Vérification genre
     if (!['Homme', 'Femme'].includes(genre)) {
-      return res.status(400).json({ message: '🚫 النوع (genre) غير صالح. يجب أن يكون Homme أو Femme' });
+      return res.status(400).json({ message: '🚫 Genre invalide. Doit être Homme ou Femme' });
     }
 
-    // ✅ تحقق من المادة (matiere)
+    // ✅ Matière obligatoire
     if (!matiere || matiere.trim() === '') {
-      return res.status(400).json({ message: '🚫 المادة (matière) مطلوبة' });
+      return res.status(400).json({ message: '🚫 La matière est requise' });
     }
 
-    // 🖼️ مسار الصورة
+    // 🖼️ Image
     const imagePath = req.file ? `/uploads/${req.file.filename}` : '';
 
-    // 🗓️ تحويل التاريخ
+    // 📅 Date de naissance
     const date = dateNaissance ? new Date(dateNaissance) : null;
 
-    // 🔁 actif إلى Boolean
-    const actifBool = actif === 'true' || actif === true;
-
-    // 🔐 تشفير كلمة السر
+    // 🔐 Hash mot de passe
     const hashed = await bcrypt.hash(motDePasse, 10);
 
-    // 🆕 إنشاء الأستاذ
+    // ✅ Convertir actif en booléen
+    const actifBool = actif === 'true' || actif === true;
+
+    // 📦 Créer le professeur
     const professeur = new Professeur({
       nom,
-      genre,
       email,
       motDePasse: hashed,
+      genre,
       telephone,
       dateNaissance: date,
       image: imagePath,
       actif: actifBool,
       cours,
-      matiere // ✅ الإضافة هنا
+      matiere
     });
 
     await professeur.save();
 
-    res.status(201).json({ message: '✅ Professeur créé avec succès', professeur });
+    // ✅ Utiliser le nom réellement sauvegardé (au cas où il a été formaté par mongoose)
+    const nomProf = professeur.nom;
+
+    // 🔁 Mettre à jour chaque Cours pour y inclure ce professeur
+    if (Array.isArray(cours)) {
+      for (const coursNom of cours) {
+        const coursDoc = await Cours.findOne({ nom: coursNom });
+        if (coursDoc && !coursDoc.professeur.includes(nomProf)) {
+          coursDoc.professeur.push(nomProf);
+          await coursDoc.save();
+        }
+      }
+    }
+
+    res.status(201).json({
+      message: '✅ Professeur créé avec succès',
+      professeur
+    });
+
   } catch (err) {
-    console.error('❌ Erreur création professeur:', err);
+    console.error('❌ Erreur lors de la création du professeur:', err);
+    res.status(500).json({ message: '❌ Erreur serveur', error: err.message });
+  }
+});
+
+app.post('/api/seances', authAdmin, async (req, res) => {
+  try {
+    // ✅ AJOUT: Inclure matiere et salle dans la destructuration
+    const { jour, heureDebut, heureFin, cours, professeur, matiere, salle } = req.body;
+
+    // Validation rapide
+    if (!jour || !heureDebut || !heureFin || !cours || !professeur) {
+      return res.status(400).json({ message: 'Tous les champs sont requis' });
+    }
+
+    // ✅ Récupérer le nom du cours à partir de l'ID
+    const coursDoc = await Cours.findById(cours);
+    if (!coursDoc) {
+      return res.status(404).json({ message: 'Cours non trouvé' });
+    }
+
+    const seance = new Seance({
+      jour,
+      heureDebut,
+      heureFin,
+      cours: coursDoc.nom, // ✅ Utiliser le nom du cours au lieu de l'ID
+      professeur,
+      matiere: matiere || '', // ✅ IMPORTANT: Inclure la matière
+      salle: salle || '' // ✅ IMPORTANT: Inclure la salle
+    });
+
+    await seance.save();
+
+    res.status(201).json({ message: 'Séance ajoutée avec succès', seance });
+  } catch (err) {
+    console.error('Erreur ajout séance:', err);
+    res.status(500).json({ message: 'Erreur serveur', error: err.message });
+  }
+});
+
+// Route pour modifier une séance - CORRIGÉE
+app.put('/api/seances/:id', authAdmin, async (req, res) => {
+  try {
+    // ✅ AJOUT: Inclure matiere et salle dans la destructuration
+    const { jour, heureDebut, heureFin, cours, professeur, matiere, salle } = req.body;
+
+    // ✅ Récupérer le nom du cours à partir de l'ID
+    const coursDoc = await Cours.findById(cours);
+    if (!coursDoc) {
+      return res.status(404).json({ message: 'Cours non trouvé' });
+    }
+
+    const seance = await Seance.findByIdAndUpdate(
+      req.params.id,
+      {
+        jour,
+        heureDebut,
+        heureFin,
+        cours: coursDoc.nom, // ✅ Utiliser le nom du cours
+        professeur,
+        matiere: matiere || '', // ✅ IMPORTANT: Inclure la matière
+        salle: salle || '' // ✅ IMPORTANT: Inclure la salle
+      },
+      { new: true }
+    );
+
+    if (!seance) {
+      return res.status(404).json({ message: 'Séance non trouvée' });
+    }
+
+    res.json({ message: 'Séance modifiée avec succès', seance });
+  } catch (err) {
+    console.error('Erreur modification séance:', err);
+    res.status(500).json({ message: 'Erreur serveur', error: err.message });
+  }
+});
+
+// Route pour récupérer toutes les séances (pour admin) - INCHANGÉE
+app.get('/api/seances', authAdmin, async (req, res) => {
+  try {
+    const seances = await Seance.find()
+      .populate('professeur', 'nom')
+      .sort({ jour: 1, heureDebut: 1 });
+
+    res.json(seances);
+  } catch (err) {
+    res.status(500).json({ message: 'Erreur serveur', error: err.message });
+  }
+});
+
+// Route pour récupérer les séances pour les étudiants - MODIFIÉE
+app.get('/api/seances/etudiant', authEtudiant, async (req, res) => {
+  try {
+    const etudiant = await Etudiant.findById(req.etudiantId);
+    const coursNoms = etudiant.cours; // Array de strings comme ['france', 'ji']
+
+    // ✅ Chercher les séances par nom de cours au lieu d'ID
+    const seances = await Seance.find({ cours: { $in: coursNoms } })
+      .populate('professeur', 'nom')
+      .sort({ jour: 1, heureDebut: 1 });
+
+    res.json(seances);
+  } catch (err) {
     res.status(500).json({ message: 'Erreur serveur', error: err.message });
   }
 });
 
 
+
+
+app.get('/api/seances/professeur', authProfesseur, async (req, res) => {
+  try {
+    const seances = await Seance.find({ professeur: req.professeurId })
+      .populate('professeur', 'nom') // Populate le professeur pour avoir le nom
+      .sort({ jour: 1, heureDebut: 1 });
+
+    res.json(seances);
+  } catch (err) {
+    res.status(500).json({ message: 'Erreur serveur', error: err.message });
+  }
+});
 // route: POST /api/professeurs/login
 app.post('/api/professeurs/login', async (req, res) => {
   try {
@@ -1879,7 +2199,17 @@ app.get('/api/cours', authAdmin, async (req, res) => {
   }
 });
 // routes/professeur.js أو في ملف Express المناسب
+app.get('/api/admin/professeurs-par-cours/:coursNom', async (req, res) => {
+  try {
+    const coursNom = req.params.coursNom;
 
+    const profs = await Professeur.find({ cours: coursNom }).select('_id nom matiere');
+    res.json(profs);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Erreur serveur' });
+  }
+});
 app.get('/api/professeur/profile', authProfesseur, async (req, res) => {
   try {
     const professeur = await Professeur.findById(req.professeurId).select('-motDePasse');
@@ -1909,6 +2239,116 @@ app.get('/api/professeurs', authAdmin, async (req, res) => {
     res.status(500).json({ message: 'Erreur serveur', error: err.message });
   }
 });
+// Enhanced API route with pagination
+app.get('/api/actualites', async (req, res) => {
+  try {
+    const { category, search, sortBy, page = 1, limit = 5 } = req.query;
+
+    let query = {};
+    if (category && category !== 'all') {
+      query.category = category;
+    }
+    if (search) {
+      query.$or = [
+        { title: new RegExp(search, 'i') },
+        { excerpt: new RegExp(search, 'i') },
+        { tags: { $in: [new RegExp(search, 'i')] } }
+      ];
+    }
+
+    // Calculate pagination
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+    
+    // Get total count for pagination
+    const total = await Actualite.countDocuments(query);
+    
+    // Fetch actualités with pagination
+    const actualites = await Actualite.find(query)
+      .sort({ isPinned: -1, date: -1 })
+      .skip(skip)
+      .limit(parseInt(limit));
+
+    res.json({
+      actualites,
+      pagination: {
+        currentPage: parseInt(page),
+        totalPages: Math.ceil(total / parseInt(limit)),
+        totalItems: total,
+        hasNext: skip + actualites.length < total,
+        hasPrev: parseInt(page) > 1
+      }
+    });
+  } catch (err) {
+    res.status(500).json({ message: 'Erreur serveur', error: err.message });
+  }
+});
+app.post('/api/actualites', authAdmin, upload.single('image'), async (req, res) => {
+  try {
+    const { title, excerpt, content, category, author, date, tags, type, isPinned } = req.body;
+
+    const nouvelleActualite = new Actualite({
+      title,
+      excerpt,
+      content,
+      category,
+      author,
+      date: date || new Date(),
+      tags: tags ? tags.split(',').map(tag => tag.trim()) : [],
+      type,
+      isPinned: isPinned === 'true',
+      image: req.file ? `/uploads/${req.file.filename}` : ''
+    });
+
+    await nouvelleActualite.save();
+    res.status(201).json(nouvelleActualite);
+  } catch (err) {
+    res.status(400).json({ message: 'Erreur ajout actualité', error: err.message });
+  }
+});
+app.delete('/api/actualites/:id', authAdmin, async (req, res) => {
+  try {
+    const deleted = await Actualite.findByIdAndDelete(req.params.id);
+    if (!deleted) {
+      return res.status(404).json({ message: 'Actualité non trouvée' });
+    }
+    res.json({ message: 'Actualité supprimée avec succès' });
+  } catch (err) {
+    res.status(500).json({ message: 'Erreur suppression', error: err.message });
+  }
+});
+// ✏️ تعديل actualité
+app.put('/api/actualites/:id', authAdmin, upload.single('image'), async (req, res) => {
+  try {
+    const { title, excerpt, content, category, author, date, tags, type, isPinned } = req.body;
+
+    const actualisation = {
+      title,
+      excerpt,
+      content,
+      category,
+      author,
+      date: date || new Date(),
+      tags: tags ? tags.split(',').map(t => t.trim()) : [],
+      type,
+      isPinned: isPinned === 'true'
+    };
+
+    if (req.file) {
+      actualisation.image = `/uploads/${req.file.filename}`;
+    }
+
+    const updated = await Actualite.findByIdAndUpdate(req.params.id, actualisation, { new: true });
+
+    if (!updated) {
+      return res.status(404).json({ message: 'Actualité non trouvée' });
+    }
+
+    res.json(updated);
+  } catch (err) {
+    res.status(500).json({ message: 'Erreur mise à jour', error: err.message });
+  }
+});
+
 app.post('/api/paiements', authAdmin, async (req, res) => {
   try {
     const { etudiant, cours, moisDebut, nombreMois, montant, note } = req.body;
@@ -2028,41 +2468,86 @@ app.get('/api/paiements', authAdmin, async (req, res) => {
 app.get('/api/paiements/exp', authAdmin, async (req, res) => {
   try {
     const paiements = await Paiement.find()
-      .populate('etudiant', ' image nomComplet actif')
-      .sort({ moisDebut: -1 }); // الأحدث أولاً
+      .populate('etudiant', 'image nomComplet actif')
+      .sort({ moisDebut: 1 }); // نرتبو من الأقدم للجديد
 
     const aujourdHui = new Date();
 
-    // تجميع آخر دفعة لكل طالب+Cours
-    const latestPaiementMap = new Map();
+    // نخزنو جميع الدفعات حسب الطالب والكورس
+    const paiementsParEtudiantCours = new Map();
 
     for (const p of paiements) {
-      const key = `${p.etudiant?._id}_${p.cours}`;
-      if (!latestPaiementMap.has(key)) {
-        latestPaiementMap.set(key, p);
+      for (const coursName of p.cours) {
+        const key = `${p.etudiant?._id}_${coursName}`;
+        if (!paiementsParEtudiantCours.has(key)) {
+          paiementsParEtudiantCours.set(key, []);
+        }
+        paiementsParEtudiantCours.get(key).push(p);
       }
     }
 
-    const expirés = [];
+    const expires = [];
 
-    for (const paiement of latestPaiementMap.values()) {
-      if (!paiement.etudiant?.actif) continue;
+    for (const [key, paiementsCours] of paiementsParEtudiantCours.entries()) {
+      const [etudiantId, nomCours] = key.split('_');
+      const etudiant = paiementsCours[0].etudiant;
 
-      const debut = new Date(paiement.moisDebut);
-      const fin = new Date(debut);
-      fin.setMonth(fin.getMonth() + Number(paiement.nombreMois));
+      if (!etudiant?.actif) continue;
 
-      if (fin < aujourdHui) {
-        expirés.push(paiement);
+      // نحددو الفترات ديال كل دفعة
+      const periodes = paiementsCours.map(p => {
+        const debut = new Date(p.moisDebut);
+        const fin = new Date(debut);
+        fin.setMonth(fin.getMonth() + Number(p.nombreMois));
+        return { debut, fin };
+      });
+
+      // نرتبو الفترات
+      periodes.sort((a, b) => a.debut - b.debut);
+
+      // ندمجو الفترات لي متداخلين أو متتابعين
+      const fusionnees = [];
+      let current = periodes[0];
+
+      for (let i = 1; i < periodes.length; i++) {
+        const next = periodes[i];
+
+        if (next.debut <= current.fin) {
+          current.fin = new Date(Math.max(current.fin.getTime(), next.fin.getTime()));
+        } else {
+          fusionnees.push(current);
+          current = next;
+        }
+      }
+
+      fusionnees.push(current);
+
+      // نشوفو واش اليوم داخل شي وحدة من الفترات
+      let actif = false;
+
+      for (const periode of fusionnees) {
+        if (aujourdHui >= periode.debut && aujourdHui <= periode.fin) {
+          actif = true;
+          break;
+        }
+      }
+
+      if (!actif) {
+        expires.push({
+          etudiant,
+          cours: nomCours,
+          derniereFin: fusionnees[fusionnees.length - 1].fin,
+        });
       }
     }
 
-    res.json(expirés);
+    res.json(expires);
   } catch (err) {
     console.error('Erreur serveur /exp:', err);
     res.status(500).json({ message: 'Erreur serveur', error: err.message });
   }
 });
+
 // ✅ Route pour supprimer un message
 app.delete('/api/messages/:messageId', async (req, res) => {
   try {
@@ -2093,6 +2578,161 @@ app.delete('/api/messages/:messageId', async (req, res) => {
   } catch (err) {
     console.error('Erreur lors de la suppression:', err);
     res.status(500).json({ message: 'Erreur serveur', error: err.message });
+  }
+});
+
+
+// Route pour supprimer une notification avec sauvegarde du contexte
+app.delete('/api/notifications/:id', authAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    console.log(`🗑️ Suppression notification: ${id}`);
+    
+    // Extraire les informations de l'ID de notification
+    const [type, , etudiantId, nombreAbsences] = id.split('_');
+    
+    if (type === 'absence' && etudiantId) {
+      // Sauvegarder la suppression avec le contexte
+      const suppressionKey = `absence_${etudiantId}`;
+      
+      await NotificationSupprimee.findOneAndUpdate(
+        { key: suppressionKey, type: 'absence_frequent' },
+        {
+          key: suppressionKey,
+          type: 'absence_frequent',
+          etudiantId: etudiantId,
+          nombreAbsencesAuMomentSuppression: parseInt(nombreAbsences) || 0,
+          dateSuppression: new Date(),
+          supprimePar: req.user.id // ID de l'admin qui a supprimé
+        },
+        { upsert: true, new: true }
+      );
+      
+      console.log(`✅ Suppression sauvegardée pour étudiant ${etudiantId} avec ${nombreAbsences} absences`);
+    }
+    
+    res.json({ 
+      success: true, 
+      message: 'Notification supprimée avec succès',
+      context: type === 'absence' ? {
+        etudiantId,
+        nombreAbsences: parseInt(nombreAbsences) || 0
+      } : null
+    });
+    
+  } catch (err) {
+    console.error('❌ Erreur suppression notification:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Route pour restaurer les notifications supprimées
+app.post('/api/notifications/reset-deleted', authAdmin, async (req, res) => {
+  try {
+    const result = await NotificationSupprimee.deleteMany({});
+    
+    console.log(`🔄 ${result.deletedCount} notifications supprimées restaurées`);
+    
+    res.json({
+      success: true,
+      restoredCount: result.deletedCount,
+      message: 'Toutes les notifications supprimées ont été restaurées'
+    });
+    
+  } catch (err) {
+    console.error('❌ Erreur restauration notifications:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Route pour configurer les seuils d'absence
+app.post('/api/notifications/seuils-absence', authAdmin, async (req, res) => {
+  try {
+    const { normal, urgent, critique } = req.body;
+    
+    // Valider les seuils
+    if (!normal || !urgent || !critique || normal >= urgent || urgent >= critique) {
+      return res.status(400).json({
+        error: 'Les seuils doivent être: normal < urgent < critique'
+      });
+    }
+    
+    // Sauvegarder en base (vous pouvez créer un modèle Configuration)
+    await Configuration.findOneAndUpdate(
+      { key: 'seuils_absence' },
+      {
+        key: 'seuils_absence',
+        value: { normal, urgent, critique },
+        modifiePar: req.user.id,
+        dateModification: new Date()
+      },
+      { upsert: true, new: true }
+    );
+    
+    console.log(`⚙️ Seuils d'absence mis à jour: ${normal}/${urgent}/${critique}`);
+    
+    res.json({
+      success: true,
+      seuils: { normal, urgent, critique },
+      message: 'Seuils d\'absence mis à jour avec succès'
+    });
+    
+  } catch (err) {
+    console.error('❌ Erreur mise à jour seuils:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Route de statistiques détaillées pour les absences
+app.get('/api/notifications/stats-absences', authAdmin, async (req, res) => {
+  try {
+    const etudiantsActifs = await Etudiant.find({ actif: true });
+    const stats = {
+      totalEtudiants: etudiantsActifs.length,
+      parSeuil: {
+        normal: 0,    // 10-14 absences
+        urgent: 0,    // 15-19 absences
+        critique: 0   // 20+ absences
+      },
+      repartition: [],
+      moyenneAbsences: 0
+    };
+    
+    let totalAbsences = 0;
+    
+    for (const etudiant of etudiantsActifs) {
+      const absences = await Presence.countDocuments({
+        etudiant: etudiant._id,
+        present: false
+      });
+      
+      totalAbsences += absences;
+      
+      stats.repartition.push({
+        etudiantId: etudiant._id,
+        nom: etudiant.nomComplet,
+        absences: absences,
+        niveau: absences >= 20 ? 'critique' : 
+                absences >= 15 ? 'urgent' : 
+                absences >= 10 ? 'normal' : 'ok'
+      });
+      
+      if (absences >= 20) stats.parSeuil.critique++;
+      else if (absences >= 15) stats.parSeuil.urgent++;
+      else if (absences >= 10) stats.parSeuil.normal++;
+    }
+    
+    stats.moyenneAbsences = Math.round(totalAbsences / etudiantsActifs.length * 100) / 100;
+    
+    // Trier par nombre d'absences décroissant
+    stats.repartition.sort((a, b) => b.absences - a.absences);
+    
+    res.json(stats);
+    
+  } catch (err) {
+    console.error('❌ Erreur stats absences:', err);
+    res.status(500).json({ error: err.message });
   }
 });
 
@@ -2216,7 +2856,364 @@ app.post('/api/rappels', async (req, res) => {
     res.status(500).json({ message: 'Erreur serveur', error: err.message });
   }
 });
+app.get('/api/vie-scolaire', async (req, res) => {
+  try {
+    const { cycle, year, category, search, limit = 10, page = 1 } = req.query;
+    
+    // Construction du filtre
+    const filter = {};
+    if (cycle) filter.cycle = cycle;
+    if (year) filter.year = year;
+    if (category && category !== 'all') filter.category = category;
+    
+    if (search) {
+      filter.$or = [
+        { title: { $regex: search, $options: 'i' } },
+        { description: { $regex: search, $options: 'i' } },
+        { fullDescription: { $regex: search, $options: 'i' } },
+        { lieu: { $regex: search, $options: 'i' } },
+        { organisateur: { $regex: search, $options: 'i' } }
+      ];
+    }
+    
+    const pageSize = parseInt(limit);
+    const currentPage = parseInt(page);
+    const skip = (currentPage - 1) * pageSize;
+    
+    // Compter le total des documents
+    const total = await Activity.countDocuments(filter);
+    
+    // Récupérer les activités avec pagination
+    const activities = await Activity.find(filter)
+      .sort({ date: -1, createdAt: -1 })
+      .skip(skip)
+      .limit(pageSize)
+      .select('-__v');
+    
+    res.json({
+      data: activities,
+      currentPage,
+      totalPages: Math.ceil(total / pageSize),
+      totalItems: total,
+      success: true
+    });
+    
+  } catch (error) {
+    console.error('Erreur lors de la récupération des activités:', error);
+    res.status(500).json({ 
+      error: 'Erreur serveur lors de la récupération des activités',
+      success: false
+    });
+  }
+});
 
+// GET une activité par ID
+app.get('/api/vie-scolaire/:id', async (req, res) => {
+  try {
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+      return res.status(400).json({ 
+        error: 'ID d\'activité invalide',
+        success: false
+      });
+    }
+    
+    const activity = await Activity.findById(req.params.id).select('-__v');
+    
+    if (!activity) {
+      return res.status(404).json({ 
+        error: 'Activité non trouvée',
+        success: false
+      });
+    }
+    
+    res.json(activity);
+    
+  } catch (error) {
+    console.error('Erreur lors de la récupération de l\'activité:', error);
+    res.status(500).json({ 
+      error: 'Erreur serveur lors de la récupération de l\'activité',
+      success: false
+    });
+  }
+});
+
+// POST créer une nouvelle activité (admin uniquement)
+app.post('/api/vie-scolaire', authAdmin, uploadVieScolaire.array('images', 10), async (req, res) => {
+  try {
+    const {
+      title,
+      date,
+      time,
+      category,
+      description,
+      fullDescription,
+      participants,
+      lieu,
+      organisateur,
+      materiel,
+      year,
+      cycle
+    } = req.body;
+    
+    // Validation des champs requis
+    if (!title || !date || !category || !description || !year || !cycle) {
+      return res.status(400).json({
+        error: 'Les champs title, date, category, description, year et cycle sont requis',
+        success: false
+      });
+    }
+    
+    // Traitement des images uploadées
+    const images = req.files ? req.files.map(file => `/uploads/vieScolaire/${file.filename}`) : [];
+    
+    // Création de l'activité
+    const activity = new Activity({
+      title: title.trim(),
+      date: new Date(date),
+      time: time?.trim(),
+      category,
+      description: description.trim(),
+      fullDescription: fullDescription?.trim(),
+      participants: participants ? parseInt(participants) : undefined,
+      lieu: lieu?.trim(),
+      organisateur: organisateur?.trim(),
+      materiel: materiel?.trim(),
+      images,
+      year,
+      cycle
+    });
+    
+    await activity.save();
+    
+    res.status(201).json({
+      data: activity,
+      message: 'Activité créée avec succès',
+      success: true
+    });
+    
+  } catch (error) {
+    console.error('Erreur lors de la création de l\'activité:', error);
+    
+    // Supprimer les fichiers uploadés en cas d'erreur
+    if (req.files) {
+      req.files.forEach(file => {
+        fs.unlink(file.path, (err) => {
+          if (err) console.error('Erreur lors de la suppression du fichier:', err);
+        });
+      });
+    }
+    
+    if (error.name === 'ValidationError') {
+      return res.status(400).json({
+        error: 'Erreur de validation des données',
+        details: error.message,
+        success: false
+      });
+    }
+    
+    res.status(500).json({
+      error: 'Erreur serveur lors de la création de l\'activité',
+      success: false
+    });
+  }
+});
+
+// PUT modifier une activité (admin uniquement)
+app.put('/api/vie-scolaire/:id', authAdmin, uploadVieScolaire.array('images', 10), async (req, res) => {
+  try {
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+      return res.status(400).json({
+        error: 'ID d\'activité invalide',
+        success: false
+      });
+    }
+    
+    const {
+      title,
+      date,
+      time,
+      category,
+      description,
+      fullDescription,
+      participants,
+      lieu,
+      organisateur,
+      materiel,
+      year,
+      cycle,
+      keepExistingImages
+    } = req.body;
+    
+    const existingActivity = await Activity.findById(req.params.id);
+    if (!existingActivity) {
+      return res.status(404).json({
+        error: 'Activité non trouvée',
+        success: false
+      });
+    }
+    
+    // Traitement des nouvelles images
+    const newImages = req.files ? req.files.map(file => `/uploads/vieScolaire/${file.filename}`) : [];
+    
+    // Gestion des images existantes
+    let finalImages = [];
+    if (keepExistingImages === 'true') {
+      finalImages = [...existingActivity.images, ...newImages];
+    } else {
+      finalImages = newImages.length > 0 ? newImages : existingActivity.images;
+    }
+    
+    // Données à mettre à jour
+    const updateData = {
+      title: title?.trim() || existingActivity.title,
+      date: date ? new Date(date) : existingActivity.date,
+      time: time?.trim() || existingActivity.time,
+      category: category || existingActivity.category,
+      description: description?.trim() || existingActivity.description,
+      fullDescription: fullDescription?.trim() || existingActivity.fullDescription,
+      participants: participants ? parseInt(participants) : existingActivity.participants,
+      lieu: lieu?.trim() || existingActivity.lieu,
+      organisateur: organisateur?.trim() || existingActivity.organisateur,
+      materiel: materiel?.trim() || existingActivity.materiel,
+      images: finalImages,
+      year: year || existingActivity.year,
+      cycle: cycle || existingActivity.cycle
+    };
+    
+    const updatedActivity = await Activity.findByIdAndUpdate(
+      req.params.id,
+      updateData,
+      { new: true, runValidators: true }
+    );
+    
+    res.json({
+      data: updatedActivity,
+      message: 'Activité mise à jour avec succès',
+      success: true
+    });
+    
+  } catch (error) {
+    console.error('Erreur lors de la mise à jour de l\'activité:', error);
+    
+    // Supprimer les nouveaux fichiers uploadés en cas d'erreur
+    if (req.files) {
+      req.files.forEach(file => {
+        fs.unlink(file.path, (err) => {
+          if (err) console.error('Erreur lors de la suppression du fichier:', err);
+        });
+      });
+    }
+    
+    if (error.name === 'ValidationError') {
+      return res.status(400).json({
+        error: 'Erreur de validation des données',
+        details: error.message,
+        success: false
+      });
+    }
+    
+    res.status(500).json({
+      error: 'Erreur serveur lors de la mise à jour de l\'activité',
+      success: false
+    });
+  }
+});
+
+// DELETE supprimer une activité (admin uniquement)
+app.delete('/api/vie-scolaire/:id', authAdmin, async (req, res) => {
+  try {
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+      return res.status(400).json({
+        error: 'ID d\'activité invalide',
+        success: false
+      });
+    }
+    
+    const activity = await Activity.findById(req.params.id);
+    if (!activity) {
+      return res.status(404).json({
+        error: 'Activité non trouvée',
+        success: false
+      });
+    }
+    
+    // Supprimer les images associées
+    if (activity.images && activity.images.length > 0) {
+      activity.images.forEach(imagePath => {
+        const fullPath = path.join(__dirname, 'public', imagePath);
+        fs.unlink(fullPath, (err) => {
+          if (err) console.error('Erreur lors de la suppression de l\'image:', err);
+        });
+      });
+    }
+    
+    await Activity.findByIdAndDelete(req.params.id);
+    
+    res.json({
+      message: 'Activité supprimée avec succès',
+      success: true
+    });
+    
+  } catch (error) {
+    console.error('Erreur lors de la suppression de l\'activité:', error);
+    res.status(500).json({
+      error: 'Erreur serveur lors de la suppression de l\'activité',
+      success: false
+    });
+  }
+});
+
+// DELETE supprimer une image spécifique d'une activité (admin uniquement)
+app.delete('/api/vie-scolaire/:id/images/:imageIndex', authAdmin, async (req, res) => {
+  try {
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+      return res.status(400).json({
+        error: 'ID d\'activité invalide',
+        success: false
+      });
+    }
+    
+    const activity = await Activity.findById(req.params.id);
+    if (!activity) {
+      return res.status(404).json({
+        error: 'Activité non trouvée',
+        success: false
+      });
+    }
+    
+    const imageIndex = parseInt(req.params.imageIndex);
+    if (imageIndex < 0 || imageIndex >= activity.images.length) {
+      return res.status(400).json({
+        error: 'Index d\'image invalide',
+        success: false
+      });
+    }
+    
+    // Supprimer le fichier physique
+    const imagePath = activity.images[imageIndex];
+    const fullPath = path.join(__dirname, 'public', imagePath);
+    fs.unlink(fullPath, (err) => {
+      if (err) console.error('Erreur lors de la suppression de l\'image:', err);
+    });
+    
+    // Retirer l'image du tableau
+    activity.images.splice(imageIndex, 1);
+    await activity.save();
+    
+    res.json({
+      data: activity,
+      message: 'Image supprimée avec succès',
+      success: true
+    });
+    
+  } catch (error) {
+    console.error('Erreur lors de la suppression de l\'image:', error);
+    res.status(500).json({
+      error: 'Erreur serveur lors de la suppression de l\'image',
+      success: false
+    });
+  }
+});
 app.get('/api/rappels', async (req, res) => {
   try {
     const rappels = await Rappel.find({ status: 'actif' })
@@ -2436,6 +3433,218 @@ app.get('/api/messages/notifications-etudiant', authEtudiant, async (req, res) =
   } catch (err) {
     console.error('Erreur chargement notifications messages:', err);
     res.status(500).json({ message: 'Erreur serveur', error: err.message });
+  }
+});
+
+app.get('/api/notifications', authAdmin, async (req, res) => {
+  try {
+    const notifications = [];
+    const aujourdHui = new Date();
+
+    // 📌 دمج paiements لكل طالب وكورس
+    const paiements = await Paiement.find()
+      .populate('etudiant', 'nomComplet actif')
+      .sort({ moisDebut: 1 }); // الأقدم أولاً
+
+    const paiementsParEtudiantCours = new Map();
+
+    for (const p of paiements) {
+      const key = `${p.etudiant?._id}_${p.cours}`;
+      if (!paiementsParEtudiantCours.has(key)) {
+        paiementsParEtudiantCours.set(key, []);
+      }
+      paiementsParEtudiantCours.get(key).push(p);
+    }
+
+    for (const [key, paiementsCours] of paiementsParEtudiantCours.entries()) {
+      const [etudiantId, nomCours] = key.split('_');
+      const etudiant = paiementsCours[0].etudiant;
+      if (!etudiant?.actif) continue;
+
+      const periodes = paiementsCours.map(p => {
+        const debut = new Date(p.moisDebut);
+        const fin = new Date(debut);
+        fin.setMonth(fin.getMonth() + Number(p.nombreMois));
+        return { debut, fin };
+      });
+
+      // ندمجو الفترات
+      periodes.sort((a, b) => a.debut - b.debut);
+      const fusionnees = [];
+      let current = periodes[0];
+
+      for (let i = 1; i < periodes.length; i++) {
+        const next = periodes[i];
+        if (next.debut <= current.fin) {
+          current.fin = new Date(Math.max(current.fin.getTime(), next.fin.getTime()));
+        } else {
+          fusionnees.push(current);
+          current = next;
+        }
+      }
+
+      fusionnees.push(current);
+
+      // نحددو الحالة
+      let actif = false;
+      let joursRestants = 0;
+
+      for (const periode of fusionnees) {
+        if (aujourdHui >= periode.debut && aujourdHui <= periode.fin) {
+          actif = true;
+          joursRestants = Math.ceil((periode.fin - aujourdHui) / (1000 * 60 * 60 * 24));
+          break;
+        }
+      }
+
+      const derniereFin = fusionnees[fusionnees.length - 1].fin;
+
+      if (!actif) {
+        notifications.push({
+          id: `payment_expired_${etudiantId}_${nomCours}`,
+          type: 'payment_expired',
+          title: 'Paiement expiré',
+          message: `💰 Paiement de ${etudiant.nomComplet} pour le cours "${nomCours}" a expiré le ${derniereFin.toLocaleDateString()}`,
+          priority: 'urgent',
+          timestamp: derniereFin,
+          data: {
+            etudiantId,
+            etudiantNom: etudiant.nomComplet,
+            cours: nomCours,
+            joursExpires: Math.ceil((aujourdHui - derniereFin) / (1000 * 60 * 60 * 24)),
+          },
+        });
+      } else if (joursRestants <= 7) {
+        notifications.push({
+          id: `payment_expiring_${etudiantId}_${nomCours}`,
+          type: 'payment_expiring',
+          title: 'Paiement expirant bientôt',
+          message: `⏳ Paiement de ${etudiant.nomComplet} pour le cours "${nomCours}" expire dans ${joursRestants} jour(s)`,
+          priority: joursRestants <= 3 ? 'high' : 'medium',
+          timestamp: derniereFin,
+          data: {
+            etudiantId,
+            etudiantNom: etudiant.nomComplet,
+            cours: nomCours,
+            joursRestants,
+          },
+        });
+      }
+    }
+
+    // 🎯 Absences
+    const SEUILS_ABSENCE = { NORMAL: 10, URGENT: 15, CRITIQUE: 20 };
+    const etudiantsActifs = await Etudiant.find({ actif: true });
+
+    for (const etudiant of etudiantsActifs) {
+      const absences = await Presence.find({
+        etudiant: etudiant._id,
+        present: false,
+      });
+
+      const nombreAbsences = absences.length;
+      const notificationSupprimee = await NotificationSupprimee.findOne({
+        key: `absence_${etudiant._id}`,
+        type: 'absence_frequent',
+      });
+
+      let doitCreerNotification = false;
+      let priorite = 'medium';
+      let titre = '';
+      let message = '';
+
+      if (nombreAbsences >= SEUILS_ABSENCE.CRITIQUE) {
+        priorite = 'urgent';
+        titre = 'CRITIQUE: Absences excessives';
+        message = `${etudiant.nomComplet} a ${nombreAbsences} absences (seuil critique: ${SEUILS_ABSENCE.CRITIQUE})`;
+        doitCreerNotification = !notificationSupprimee || notificationSupprimee.nombreAbsencesAuMomentSuppression < nombreAbsences;
+      } else if (nombreAbsences >= SEUILS_ABSENCE.URGENT) {
+        priorite = 'high';
+        titre = 'URGENT: Absences répétées';
+        message = `${etudiant.nomComplet} a ${nombreAbsences} absences (seuil urgent: ${SEUILS_ABSENCE.URGENT})`;
+        doitCreerNotification = !notificationSupprimee || notificationSupprimee.nombreAbsencesAuMomentSuppression < nombreAbsences;
+      } else if (nombreAbsences >= SEUILS_ABSENCE.NORMAL) {
+        priorite = 'medium';
+        titre = 'Attention: Absences multiples';
+        message = `${etudiant.nomComplet} a ${nombreAbsences} absences (seuil normal: ${SEUILS_ABSENCE.NORMAL})`;
+        doitCreerNotification = !notificationSupprimee || notificationSupprimee.nombreAbsencesAuMomentSuppression < nombreAbsences;
+      }
+
+      if (doitCreerNotification) {
+        const absencesParCours = {};
+        for (const absence of absences) {
+          absencesParCours[absence.cours] = (absencesParCours[absence.cours] || 0) + 1;
+        }
+
+        notifications.push({
+          id: `absence_frequent_${etudiant._id}_${nombreAbsences}`,
+          type: 'absence_frequent',
+          title: titre,
+          message: message,
+          priority: priorite,
+          timestamp: new Date(),
+          data: {
+            etudiantId: etudiant._id,
+            etudiantNom: etudiant.nomComplet,
+            nombreAbsences,
+            seuil: priorite.toLowerCase(),
+            absencesParCours,
+            derniereAbsence: absences.length > 0 ? absences[absences.length - 1].dateSession : null,
+          },
+        });
+      }
+    }
+
+    // 📅 Events
+    const dans7jours = new Date();
+    dans7jours.setDate(dans7jours.getDate() + 7);
+    const evenements = await Evenement.find({
+      dateDebut: { $gte: aujourdHui, $lte: dans7jours },
+    }).sort({ dateDebut: 1 });
+
+    for (const evenement of evenements) {
+      const joursRestants = Math.ceil((new Date(evenement.dateDebut) - aujourdHui) / (1000 * 60 * 60 * 24));
+      let priorite = 'medium';
+      if (joursRestants === 0) priorite = 'urgent';
+      else if (joursRestants === 1) priorite = 'high';
+
+      notifications.push({
+        id: `event_upcoming_${evenement._id}`,
+        type: 'event_upcoming',
+        title: `${evenement.type} programmé`,
+        message: joursRestants === 0
+          ? `${evenement.titre} prévu aujourd'hui`
+          : `${evenement.titre} prévu dans ${joursRestants} jour(s)`,
+        priority: priorite,
+        timestamp: evenement.dateDebut,
+        data: {
+          evenementId: evenement._id,
+          titre: evenement.titre,
+          type: evenement.type,
+          dateDebut: evenement.dateDebut,
+          joursRestants,
+        },
+      });
+    }
+
+    // 🔽 ترتيب حسب الأولوية
+    const priorityOrder = { urgent: 4, high: 3, medium: 2, low: 1 };
+    notifications.sort((a, b) => {
+      const priorityDiff = priorityOrder[b.priority] - priorityOrder[a.priority];
+      if (priorityDiff !== 0) return priorityDiff;
+      return new Date(b.timestamp) - new Date(a.timestamp);
+    });
+
+    res.json({
+      notifications,
+      total: notifications.length,
+      urgent: notifications.filter(n => n.priority === 'urgent').length,
+      high: notifications.filter(n => n.priority === 'high').length,
+      medium: notifications.filter(n => n.priority === 'medium').length,
+    });
+  } catch (err) {
+    console.error('❌ Erreur notifications:', err);
+    res.status(500).json({ error: err.message });
   }
 });
 

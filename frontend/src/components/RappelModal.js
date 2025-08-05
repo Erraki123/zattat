@@ -128,7 +128,7 @@ const RappelModal = ({
           }}>
             <DollarSign size={16} color="#dc2626" />
             <div>
-              <span style={{ fontSize: '14px', color: '#991b1b', fontWeight: '500' }}>Montant restant:</span>
+              <span style={{ fontSize: '14px', fontWeight: '500' }}>Montant qui donnée:</span>
               <span style={{ marginLeft: '8px', color: '#dc2626', fontWeight: '700' }}>{montant} Dh</span>
             </div>
           </div>

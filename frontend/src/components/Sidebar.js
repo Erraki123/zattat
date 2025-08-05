@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { 
   GraduationCap,
+  School,
+  Clock,
   Users,
   BookOpen,
   CreditCard,
@@ -11,9 +13,13 @@ import {
   LogOut,
   Menu,
   X,
+   MessageCircle,
   Home,
   User,
   Shield,
+  QrCode,
+      Newspaper
+
   
 } from 'lucide-react';
 
@@ -91,12 +97,25 @@ const Sidebar = ({ onLogout }) => {
       label: 'Nouveau Paiement',
       icon: Plus
     },
+
     {
       path: '/liste-paiements',
       label: 'Paiements',
       icon: CreditCard
     },
    
+        {
+      path: '/admin/seances',
+      label: 'Séances',
+      icon:  Clock
+    },
+   
+      {
+      path: '/admin/messages',
+      label: 'messages',
+      icon:   MessageCircle
+
+    },
     {
       path: '/calendrier',
       label: 'Calendrier',
@@ -106,6 +125,25 @@ const Sidebar = ({ onLogout }) => {
       path: '/liste-presences',
       label: 'Liste présences',
       icon: ClipboardList
+    } ,
+     {
+      path: '/admin/VieScolaire',
+      label: 'Vie Scolaire',
+      icon: School
+
+
+    },
+ {
+      path: '/admin/actualites',
+      label: 'Actualités',
+      icon: Newspaper
+
+    },
+    
+    {
+      path: '/admin/qr-planning',
+      label: 'QR Planning',
+      icon: QrCode
     }
   ];
 
@@ -541,7 +579,7 @@ const Sidebar = ({ onLogout }) => {
             <div className="header-icon">
               <GraduationCap size={20} />
             </div>
-            Zettat School
+            Alfred Kastler
           </h3>
         </div>
 

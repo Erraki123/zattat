@@ -6,7 +6,9 @@ const qrSessionSchema = new mongoose.Schema({
   periode: { type: String, enum: ['matin', 'soir'], required: true },
 cours: { type: String, required: true },
   professeur: { type: mongoose.Schema.Types.ObjectId, ref: 'Professeur', required: true },
-  matiere: { type: String }
+  matiere: { type: String },
+  horaire: { type: String, required: true } // ex: "08:00-10:00"
+
 });
 
 module.exports = mongoose.model('QrSession', qrSessionSchema);

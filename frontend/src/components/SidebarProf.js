@@ -3,6 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { 
   GraduationCap,
   Users,
+  Clock,
   UserCheck,
   ClipboardList,
   LogOut,
@@ -69,7 +70,15 @@ const SidebarProf = ({ onLogout }) => {
       path: '/professeur/profile',
       label: 'Mon Profil',
       icon: User
-    },  {
+    },
+     {
+          path: '/professeur/seances',
+          label: 'Mes Séances',
+          icon: Clock
+    
+        },
+    
+    {
       path: '/professeur/messages',
       label: 'messages',
       icon: MessageCircle

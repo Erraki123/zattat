@@ -43,8 +43,22 @@ import MessageEtudiant from './pages/MessageEtudiant';
 import ProfileUpdatePage from './pages/ProfileUpdatePage';
 import PaiementsExp from './pages/PaiementsExp';
 import KastlerHomepage from './pages/KastlerHomepage';
-
-
+import AdminAjouterSeance from './pages/AdminAjouterSeance';
+import ActualitesPage from './pages/ActualitesPage';
+import VieScolairePage from './pages/VieScolairePage';
+import SeancesEtudiant from './pages/SeancesEtudiant';
+import SeancesProfesseur from './pages/SeancesProfesseur';
+import ContactPage from './pages/ContactPage';
+import CyclesPage from './pages/CyclesPage';
+import AdminMessages from './pages/AdminMessages';
+import Propos from './pages/Propos';
+import AdminVieScolaire from './pages/AdminVieScolaire';
+import EcolePrimairePage from './pages/EcolePrimairePage';
+import CrechePrescolairePage from './pages/CrechePrescolairePage'; // Import de la page
+import CollegePage from './pages/CollegePage'; // Import de la page
+import LyceePage
+ from './pages/LyceePage'; // Import de la page
+import AdminActualites from './pages/AdminActualites';
 
 
 function AppContent() {
@@ -90,41 +104,25 @@ function AppContent() {
 
   return (
     <>
-      {/* Bouton d'installation - affiché uniquement sur la page de login */}
-      {location.pathname === '/' && (
-        <button
-          id="install-button"
-          style={{
-            display: 'none',
-            position: 'fixed',
-            bottom: '20px',
-            right: '20px',
-            padding: '12px 18px',
-            backgroundColor: '#4f46e5',
-            color: 'white',
-            fontWeight: 'bold',
-            border: 'none',
-            borderRadius: '8px',
-            boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
-            cursor: 'pointer',
-            alignItems: 'center',
-            gap: '8px',
-            zIndex: 999
-          }}
-          title="Installer l'application"
-        >
-          <Download size={18} />
-          Installer l'application
-        </button>
-      )}
+     
 
       <Routes>
         {/* Routes principales */}
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
-                <Route path="/" element={<KastlerHomepage/>} />
+        <Route path="/" element={<KastlerHomepage/>} />
+        <Route path="/propos" element={< Propos/>} />
+        <Route path="/contact" element={<ContactPage/>} />
+        <Route path="/Cycles" element={<CyclesPage/>} />
+        <Route path="/ecole-primaire" element={<EcolePrimairePage/>} />
+        <Route path="/CrechePrescolaire" element={<CrechePrescolairePage/>} />
+        <Route path="/college" element={<CollegePage/>} />
+        <Route path="/lycee" element={<LyceePage/>} />
 
-        
+<Route path="/admin/actualites" element={<AdminActualites />} />
+
+
+
         {/* Routes Admin */}
         <Route path="/admin" element={<AdminDashboard />} />
         <Route path="/liste-etudiants" element={<ListeEtudiants />} />
@@ -139,9 +137,12 @@ function AppContent() {
         <Route path="/liste-presences" element={<ListePresences />} />
         <Route path="/update-profil" element={<ProfileUpdatePage />} />
         <Route path="/paiements-exp" element={<PaiementsExp />} />
-<Route path="/qretudiant" element={<QREtudiant />} />
+<Route path="/qr-etudiant" element={<QREtudiant />} />
+<Route path="/admin/seances" element={<AdminAjouterSeance />} />
+<Route path="/etudiant/seances" element={<SeancesEtudiant />} />
+<Route path="/professeur/seances" element={<SeancesProfesseur />} />
 
-<Route path="/admin/qr-week-planning" element={<QrWeekPlanningAdmin />} />
+<Route path="/admin/qr-planning" element={<QrWeekPlanningAdmin />} />
 
         {/* Routes Professeur */}
         <Route path="/professeur" element={<ProfesseurDashboard />} />
@@ -154,7 +155,12 @@ function AppContent() {
         <Route path="/professeur/live" element={<ProfLiveCours />} />
         <Route path="/prof/documents" element={<DocumentsProfesseur />} />
 <Route path="/professeur/messages" element={<MessageProf />} />
+<Route path="/admin/messages" element={<AdminMessages />} />
 
+<Route path="/actualites" element={<ActualitesPage />} />
+<Route path="/Vie-Scolaire" element={<VieScolairePage />} />
+
+<Route path="/admin/VieScolaire" element={<AdminVieScolaire />} />
         {/* Routes Étudiant */}
         <Route path="/etudiant/messages" element={<MessageEtudiant />} />
 

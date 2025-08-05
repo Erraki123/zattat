@@ -1,312 +1,335 @@
-import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { 
-  GraduationCap, 
-  Users, 
-  BookOpen, 
-  Award, 
-  Phone, 
-  Mail, 
-  MapPin, 
-  Clock,
-  Star,
-  ChevronRight,
-  Play,
-  Calendar,
-  Shield,
-  Globe,
-  Heart,
-  Target,
-  Menu,
-  X,
-  LogIn
-} from 'lucide-react';
+import React, { useState } from 'react';
+import { Heart, BookOpen, Target, GraduationCap, MapPin, Phone, Mail, Clock, ChevronRight, Baby, Users, ArrowRight, Send, User, MessageSquare, CheckCircle, AlertCircle } from 'lucide-react';
+import Navbar from '../components/Navbar';
+import Footer from '../components/Footer';
+import ScrollToTop from '../components/ScrollToTop';
+import SocialFAB from '../components/SocialFAB';
 
 const KastlerHomepage = () => {
-  const navigate = useNavigate();
-  const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const [currentSlide, setCurrentSlide] = useState(0);
+  // État pour le formulaire de contact
+  const [formData, setFormData] = useState({
+    firstName: '',
+    lastName: '',
+    email: '',
+    phone: '',
+    cycle: '',
+    subject: '',
+    message: ''
+  });
 
-  const slides = [
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitStatus, setSubmitStatus] = useState(null);
+
+  const handleInputChange = (e) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({
+      ...prev,
+      [name]: value
+    }));
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setIsSubmitting(true);
+    setSubmitStatus(null);
+    
+    try {
+      const response = await fetch('http://localhost:5000/api/contact/send', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(formData)
+      });
+
+      const result = await response.json();
+
+      if (response.ok) {
+        setSubmitStatus('success');
+        setFormData({
+          firstName: '',
+          lastName: '',
+          email: '',
+          phone: '',
+          cycle: '',
+          subject: '',
+          message: ''
+        });
+        
+        setTimeout(() => {
+          setSubmitStatus(null);
+        }, 5000);
+      } else {
+        setSubmitStatus('error');
+        console.error('Erreur lors de l\'envoi:', result.message);
+      }
+    } catch (error) {
+      setSubmitStatus('error');
+      console.error('Erreur réseau:', error);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  // Cartes des cycles éducatifs pour le hero
+  const educationCards = [
     {
-      title: "Excellence Éducative",
-      subtitle: "De la crèche au lycée, nous accompagnons chaque élève vers la réussite",
-      gradient: "linear-gradient(to right, #2563eb, #7c3aed, #4338ca)"
+      id: 'creche',
+      icon: <Heart size={28} />,
+      title: "Crèche & Préscolaire",
+      image: '/images/child-315049_640.jpg',
+      route: '/CrechePrescolaire'
     },
     {
-      title: "Innovation Pédagogique", 
-      subtitle: "Méthodes modernes et technologies numériques au service de l'apprentissage",
-      gradient: "linear-gradient(to right, #059669, #3b82f6, #7c3aed)"
+      id: 'primaire',
+      icon: <BookOpen size={28} />,
+      title: "École Primaire",
+      image: '/images/istockphoto-1194312917-612x612.jpg',
+      route: '/ecole-primaire'
     },
     {
-      title: "Épanouissement Personnel",
-      subtitle: "Un environnement bienveillant pour développer talents et personnalité",
-      gradient: "linear-gradient(to right, #f43f5e, #ec4899, #7c3aed)"
+      id: 'college',
+      icon: <Target size={28} />,
+      title: "Collège",
+      image: '/images/istockphoto-2184618859-612x612.jpg',
+      route: '/college'
+    },
+    {
+      id: 'lycee',
+      icon: <GraduationCap size={28} />,
+      title: "Lycée",
+      image: '/images/graduation-4502796_640.jpg',
+      route: '/lycee'
     }
   ];
 
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setCurrentSlide((prev) => (prev + 1) % slides.length);
-    }, 5000);
-    return () => clearInterval(timer);
-  }, []);
-
+  // Features de l'école
   const features = [
     {
-      icon: <Users size={32} />,
-      title: "Encadrement Personnalisé",
-      description: "Suivi individuel de chaque élève par une équipe pédagogique expérimentée"
-    },
-    {
-      icon: <Globe size={32} />,
-      title: "Multilinguisme",
-      description: "Enseignement en français, arabe et anglais pour une ouverture internationale"
-    },
-    {
-      icon: <Award size={32} />,
+      icon: <Target size={32} />,
       title: "Excellence Académique",
-      description: "Résultats exceptionnels aux examens nationaux et préparation universitaire"
+      description: "Un programme éducatif rigoureux adapté aux standards internationaux pour garantir la réussite de chaque élève."
     },
     {
       icon: <Heart size={32} />,
       title: "Environnement Bienveillant",
-      description: "Cadre sécurisé et chaleureux favorisant l'épanouissement de chaque enfant"
+      description: "Un cadre sécurisé et chaleureux où chaque enfant peut s'épanouir et développer sa personnalité."
+    },
+    {
+      icon: <GraduationCap size={32} />,
+      title: "Équipe Pédagogique",
+      description: "Des enseignants qualifiés et passionnés, dédiés à l'accompagnement personnalisé de chaque élève."
+    },
+    {
+      icon: <BookOpen size={32} />,
+      title: "Innovation Pédagogique",
+      description: "Des méthodes d'enseignement modernes intégrant les nouvelles technologies et les approches créatives."
     }
   ];
 
+  // Cycles détaillés - UTILISANT LA STRUCTURE DE CYCLESPAGE
   const cycles = [
     {
-      title: "Crèche & Préscolaire",
-      age: "2-5 ans",
-      description: "Éveil, socialisation et préparation aux apprentissages fondamentaux",
-      gradient: "linear-gradient(to right, #f472b6, #f43f5e)",
-      icon: <Heart size={24} />
+      id: 'creche',
+      icon: 'icons/playtime.png',
+      title: 'Crèche & Préscolaire',
+      description: 'Un environnement sécurisé et stimulant pour les premiers apprentissages.',
+      features: [
+        'Développement de la motricité',
+        'Éveil artistique et créatif',
+        'Socialisation et autonomie',
+        'Apprentissage ludique des bases'
+      ],
+      backgroundImage: 'images/child-315049_640.jpg',
+      color: '#FF6B6B',
+      route: '/CrechePrescolaire'
     },
     {
-      title: "École Primaire", 
-      age: "6-11 ans",
-      description: "Acquisition des fondamentaux : lecture, écriture, calcul et ouverture culturelle",
-      gradient: "linear-gradient(to right, #60a5fa, #6366f1)",
-      icon: <BookOpen size={24} />
+      id: 'primaire',
+      icon: 'icons/children.png',
+      title: 'École Primaire',
+      description: 'Acquisition des fondamentaux avec une pédagogie moderne et bienveillante.',
+      features: [
+        'Maîtrise de la lecture et écriture',
+        'Mathématiques et sciences',
+        'Langues étrangères',
+        'Activités sportives et culturelles'
+      ],
+      backgroundImage: 'https://images.unsplash.com/photo-1503676260728-1c00da094a0b?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80',
+      color: '#4ECDC4',
+      route: '/ecole-primaire'
     },
     {
-      title: "Collège",
-      age: "12-15 ans", 
-      description: "Approfondissement des connaissances et développement de l'autonomie",
-      gradient: "linear-gradient(to right, #4ade80, #059669)",
-      icon: <Target size={24} />
+      id: 'college',
+      icon: 'icons/student.png',
+      title: 'Collège',
+      description: 'Construction de la personnalité et approfondissement des connaissances.',
+      features: [
+        'Programme national enrichi',
+        'Orientation personnalisée',
+        'Projets interdisciplinaires',
+        'Préparation au lycée'
+      ],
+      backgroundImage: 'https://images.unsplash.com/photo-1580582932707-520aed937b7b?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80',
+      color: '#45B7D1',
+      route: '/college'
     },
     {
-      title: "Lycée",
-      age: "16-18 ans",
-      description: "Préparation au baccalauréat et orientation vers l'enseignement supérieur",
-      gradient: "linear-gradient(to right, #a78bfa, #8b5cf6)", 
-      icon: <GraduationCap size={24} />
+      id: 'lycee',
+      icon: 'icons/classmates.png',
+      title: 'Lycée',
+      description: 'Excellence académique et préparation aux études supérieures.',
+      features: [
+        'Filières scientifiques et littéraires',
+        'Préparation au baccalauréat',
+        'Orientation post-bac',
+        'Développement du leadership'
+      ],
+      backgroundImage: 'https://images.unsplash.com/photo-1523240795612-9a054b0db644?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80',
+      color: '#96CEB4',
+      route: '/lycee'
     }
   ];
 
+  // Informations de contact - MISE À JOUR AVEC LES ICÔNES DE CONTACTPAGE
+  const contactInfo = [
+    {
+      icon: 'icons/google-maps.png',
+      title: "Adresse",
+      content: "130, Boulevard Ali Yaàta, Hay Al Mohammadi, Casablanca",
+      color: "#3b82f6"
+    },
+    {
+      icon: 'icons/telephone.png',
+      title: "Téléphone",
+      content: "+212 5 22 62 81 82",
+      color: "#10b981"
+    },
+    {
+      icon: 'icons/communication.png',
+      title: "Email",
+      content: "contact@kastler.ma",
+      color: "#8b5cf6"
+    },
+    {
+      icon: 'icons/schedule.png',
+      title: "Horaires",
+      content: "Lundi - Samedi: 07:00 - 17:00",
+      color: "#f59e0b"
+    }
+  ];
+
+  // Fonctions de navigation - REPRISES DE CYCLESPAGE
+  const handleCardClick = (cycle) => {
+    window.location.href = cycle.route;
+  };
+
+  const handleDiscoverClick = (e, cycle) => {
+    e.stopPropagation();
+    window.location.href = cycle.route;
+  };
+
+  const handleHeroCardClick = (card) => {
+    window.location.href = card.route;
+  };
+
   const styles = {
-    container: {
-      minHeight: '100vh',
-      backgroundColor: '#f9fafb'
-    },
-    header: {
-      background: 'white',
-      boxShadow: '0 10px 25px -3px rgba(0, 0, 0, 0.1)',
-      position: 'fixed',
-      width: '100%',
-      top: 0,
-      zIndex: 50
-    },
-    navContainer: {
-      maxWidth: '1280px',
-      margin: '0 auto',
-      padding: '0 1rem'
-    },
-    navContent: {
-      display: 'flex',
-      justifyContent: 'space-between',
-      alignItems: 'center',
-      padding: '1rem 0'
-    },
-    logo: {
-      display: 'flex',
-      alignItems: 'center',
-      gap: '0.75rem'
-    },
-    logoIcon: {
-      width: '48px',
-      height: '48px',
-      background: 'linear-gradient(135deg, #2563eb, #7c3aed)',
-      borderRadius: '12px',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      color: 'white'
-    },
-    logoText: {
-      display: 'flex',
-      flexDirection: 'column'
-    },
-    logoTitle: {
-      fontSize: '1.25rem',
-      fontWeight: 'bold',
-      color: '#111827'
-    },
-    logoSubtitle: {
-      fontSize: '0.875rem',
-      color: '#6b7280'
-    },
-    desktopMenu: {
-      display: 'flex',
-      alignItems: 'center',
-      gap: '2rem'
-    },
-    menuLink: {
-      color: '#374151',
-      fontWeight: '500',
-      textDecoration: 'none',
-      transition: 'color 0.3s',
-      cursor: 'pointer'
-    },
-    loginBtn: {
-      width: '48px',
-      height: '48px',
-      background: 'linear-gradient(135deg, #2563eb, #7c3aed)',
-      color: 'white',
-      border: 'none',
-      borderRadius: '12px',
-      cursor: 'pointer',
-      transition: 'all 0.3s',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
-    },
-    mobileMenuBtn: {
-      display: 'none',
-      padding: '0.5rem',
-      background: 'none',
-      border: 'none',
-      cursor: 'pointer'
-    },
-    mobileMenu: {
-      background: 'white',
-      borderTop: '1px solid #e5e7eb',
-      padding: '0.5rem'
-    },
-    mobileMenuLink: {
-      display: 'block',
-      padding: '0.5rem 0.75rem',
-      color: '#374151',
-      textDecoration: 'none',
-      borderRadius: '0.25rem',
-      transition: 'color 0.3s'
-    },
+    // Hero Section Styles
     heroSection: {
       paddingTop: '5rem',
       minHeight: '100vh',
       display: 'flex',
       alignItems: 'center',
       position: 'relative',
-      overflow: 'hidden'
-    },
-    heroBackground: {
-      position: 'absolute',
-      inset: 0,
-      background: slides[currentSlide].gradient,
-      transition: 'all 1s ease-in-out'
+      overflow: 'hidden',   
+      backgroundImage: 'url(images/abdo.png)',
+      backgroundSize: 'cover',
+      backgroundPosition: 'center',
+      backgroundRepeat: 'no-repeat'
     },
     heroOverlay: {
       position: 'absolute',
       inset: 0,
-      backgroundColor: 'rgba(0, 0, 0, 0.4)'
+      backgroundColor: 'rgba(0, 0, 0, 0.6)',
+      zIndex: 1
     },
     heroContent: {
       position: 'relative',
-      zIndex: 10,
-      maxWidth: '1280px',
+      zIndex: 2,
+      width: '100%',
+      maxWidth: '1200px',
       margin: '0 auto',
-      padding: '0 1rem',
-      textAlign: 'center',
-      color: 'white'
+      padding: '0 20px'
     },
-    heroInner: {
-      maxWidth: '896px',
-      margin: '0 auto'
+    cardsRow: {
+      display: 'flex',
+      justifyContent: 'center',
+      gap: '20px',
+      flexWrap: 'wrap'
     },
-    heroTitle: {
-      fontSize: 'clamp(3rem, 8vw, 7rem)',
-      fontWeight: 'bold',
-      marginBottom: '1.5rem',
+    educationCard: {
+      width: '250px',
+      height: '180px',
+      background: '#000',
+      borderRadius: '12px',
+      overflow: 'hidden',
+      position: 'relative',
+      cursor: 'pointer',
+      transition: 'all 0.3s ease',
+      boxShadow: '0 10px 30px rgba(0, 0, 0, 0.3)',
       opacity: 0,
-      animation: 'fadeIn 1s ease-out forwards'
+      transform: 'scale(0.9)',
+      animation: 'fadeZoomIn 0.8s ease forwards'
     },
-    heroSubtitle: {
-      fontSize: 'clamp(1.25rem, 4vw, 2rem)',
-      marginBottom: '2rem',
-      opacity: 0.9
+    cardImage: {
+      width: '100%',
+      height: '100%',
+      objectFit: 'cover',
+      transition: 'transform 0.3s ease'
     },
-    heroButtons: {
+    cardOverlay: {
+      position: 'absolute',
+      inset: 0,
+      background: 'linear-gradient(to top, rgba(0, 0, 0, 0.8) 0%, rgba(0, 0, 0, 0.3) 100%)',
       display: 'flex',
       flexDirection: 'column',
-      gap: '1rem',
-      justifyContent: 'center'
+      justifyContent: 'flex-end',
+      padding: '20px',
+      color: 'white'
     },
-    heroBtn1: {
-      background: 'white',
-      color: '#111827',
-      padding: '1rem 2rem',
-      borderRadius: '9999px',
-      border: 'none',
-      fontWeight: '600',
-      cursor: 'pointer',
-      transition: 'all 0.3s',
-      fontSize: '1rem'
-    },
-    heroBtn2: {
-      border: '2px solid white',
-      background: 'transparent',
-      color: 'white',
-      padding: '1rem 2rem',
-      borderRadius: '9999px',
-      fontWeight: '600',
-      cursor: 'pointer',
-      transition: 'all 0.3s',
-      fontSize: '1rem'
-    },
-    slideIndicators: {
+    cardIcon: {
       position: 'absolute',
-      bottom: '2rem',
-      left: '50%',
-      transform: 'translateX(-50%)',
-      display: 'flex',
-      gap: '0.5rem'
-    },
-    slideIndicator: {
-      width: '12px',
-      height: '12px',
+      top: '15px',
+      right: '15px',
+      width: '45px',
+      height: '45px',
+      background: 'white',
       borderRadius: '50%',
-      border: 'none',
-      cursor: 'pointer',
-      transition: 'all 0.3s'
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      color: '	#9933CC',
+      transition: 'all 0.3s ease'
     },
-    featuresSection: {
-      padding: '5rem 0',
-      backgroundColor: 'white'
+    cardTitle: {
+      fontSize: '18px',
+      fontWeight: 'bold',
+      color: 'white',
+      textAlign: 'center'
     },
+
+    // Section Styles
     sectionContainer: {
-      maxWidth: '1280px',
+      maxWidth: '1200px',
       margin: '0 auto',
-      padding: '0 1rem'
+      padding: '0 20px'
     },
     sectionHeader: {
       textAlign: 'center',
       marginBottom: '4rem'
     },
     sectionTitle: {
-      fontSize: '2.5rem',
+      fontSize: '3rem',
       fontWeight: 'bold',
       color: '#111827',
       marginBottom: '1rem'
@@ -314,93 +337,183 @@ const KastlerHomepage = () => {
     sectionSubtitle: {
       fontSize: '1.25rem',
       color: '#6b7280',
-      maxWidth: '768px',
+      maxWidth: '600px',
       margin: '0 auto'
+    },
+
+    // Features Section
+    featuresSection: {
+      padding: '6rem 0',
+      backgroundColor: '#f9fafb'
     },
     featuresGrid: {
       display: 'grid',
-      gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))',
+      gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
       gap: '2rem'
     },
     featureCard: {
+      background: 'white',
+      padding: '2rem',
+      borderRadius: '12px',
       textAlign: 'center',
-      transition: 'transform 0.3s'
+      boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
+      transition: 'transform 0.3s ease'
     },
     featureIcon: {
       width: '80px',
       height: '80px',
-      background: 'linear-gradient(135deg, #3b82f6, #7c3aed)',
-      borderRadius: '16px',
+      background: 'white',
+      borderRadius: '50%',
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
       margin: '0 auto 1.5rem',
-      color: 'white',
-      transition: 'all 0.3s'
+      color: ' #4c1781',
+      transition: 'transform 0.3s ease'
     },
     featureTitle: {
-      fontSize: '1.25rem',
-      fontWeight: '600',
+      fontSize: '1.5rem',
+      fontWeight: 'bold',
       color: '#111827',
-      marginBottom: '0.75rem'
+      marginBottom: '1rem'
     },
     featureDescription: {
-      color: '#6b7280'
+      color: '#6b7280',
+      lineHeight: '1.6'
     },
+
+    // Cycles Section - STYLES REPRIS DE CYCLESPAGE
     cyclesSection: {
-      padding: '5rem 0',
-      backgroundColor: '#f9fafb'
+      width: '100vw',
+      background: '#f8f9fa',
+      display: 'flex',
+      alignItems: 'stretch',
+      minHeight: '70vh'
     },
-    cyclesGrid: {
-      display: 'grid',
-      gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
-      gap: '1.5rem'
+    cyclesRow: {
+      display: 'flex',
+      flexWrap: 'wrap',
+      width: '100%'
     },
     cycleCard: {
-      background: 'white',
-      borderRadius: '16px',
-      padding: '1.5rem',
-      boxShadow: '0 10px 25px -3px rgba(0, 0, 0, 0.1)',
-      transition: 'all 0.3s'
+      width: '25%',
+      padding: '40px 20px',
+      minHeight: '65vh',
+      position: 'relative',
+      backgroundColor: 'white',
+      borderRight: '1px solid #eee',
+      display: 'flex',
+      flexDirection: 'column',
+      alignItems: 'center',
+      justifyContent: 'flex-start',
+      overflow: 'hidden',
+      transition: 'all 0.3s ease',
+      cursor: 'pointer'
+    },
+    cycleCardLast: {
+      borderRight: 'none'
+    },
+    cardContent: {
+      position: 'relative',
+      zIndex: 2,
+      display: 'flex',
+      flexDirection: 'column',
+      alignItems: 'center',
+      height: '100%',
+      width: '100%'
     },
     cycleIcon: {
-      width: '64px',
-      height: '64px',
-      borderRadius: '12px',
+      width: '65px',
+      height: '65px',
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
-      color: 'white',
-      marginBottom: '1rem'
+      marginBottom: '15px',
+      backgroundColor: 'transparent',
+      borderRadius: '50%',
+      padding: '10px',
+      transition: 'all 0.3s ease'
     },
     cycleTitle: {
-      fontSize: '1.25rem',
-      fontWeight: '600',
-      color: '#111827',
-      marginBottom: '0.5rem'
+      fontSize: '20px',
+      fontWeight: 'bold',
+      textAlign: 'center',
+      marginBottom: '5px',
+      transition: 'all 0.3s ease'
     },
-    cycleAge: {
-      fontSize: '0.875rem',
-      color: '#6b7280',
-      marginBottom: '0.75rem',
-      fontWeight: '500'
+    cycleSubtitle: {
+      fontSize: '14px',
+      color: '#666',
+      marginBottom: '10px',
+      fontWeight: '600',
+      transition: 'all 0.3s ease'
+    },
+    divider: {
+      width: '40px',
+      height: '2px',
+      backgroundColor: ' #4c1781',
+      marginBottom: '20px'
     },
     cycleDescription: {
-      color: '#6b7280',
-      marginBottom: '1rem'
+      fontSize: '14px',
+      color: '#666',
+      textAlign: 'center',
+      marginBottom: '20px',
+      lineHeight: '1.5',
+      maxWidth: '240px',
+      transition: 'all 0.3s ease'
     },
-    cycleLink: {
-      color: '#2563eb',
-      fontWeight: '500',
+    featuresList: {
+      listStyle: 'none',
+      padding: 0,
+      margin: 0,
+      textAlign: 'left',
+      fontSize: '15px',
+      lineHeight: '1.8',
+      maxWidth: '240px',
+      fontWeight: '600',
+      flexGrow: 1,
+      color: '#333',
+      transition: 'all 0.3s ease'
+    },
+    featureItem: {
+      marginBottom: '8px',
       display: 'flex',
-      alignItems: 'center',
-      textDecoration: 'none',
-      transition: 'color 0.3s'
+      alignItems: 'flex-start',
+      gap: '8px'
     },
+    featureBullet: {
+      width: '6px',
+      height: '6px',
+      backgroundColor: ' #4c1781',
+      borderRadius: '50%',
+      marginTop: '8px',
+      flexShrink: 0
+    },
+    cycleButton: {
+      display: 'inline-flex',
+      alignItems: 'center',
+      gap: '8px',
+      backgroundColor: 'white',
+      color: 'black',
+      padding: '14px 24px',
+      borderRadius: '50px',
+      textDecoration: 'none',
+      fontWeight: '600',
+      fontSize: '15px',
+      transition: 'all 0.3s ease',
+      marginTop: 'auto',
+      marginBottom: '10px',
+      border: '2px solid black',
+      textTransform: 'uppercase',
+      letterSpacing: '0.5px',
+      cursor: 'pointer'
+    },
+
+    // Stats Section
     statsSection: {
-      padding: '5rem 0',
-      background: 'linear-gradient(to right, #2563eb, #7c3aed, #4338ca)',
-      color: 'white'
+      padding: '4rem 0',
+      backgroundColor: ' #4c1781'
     },
     statsGrid: {
       display: 'grid',
@@ -409,36 +522,48 @@ const KastlerHomepage = () => {
       textAlign: 'center'
     },
     statNumber: {
-      fontSize: '2.5rem',
+      fontSize: '3rem',
       fontWeight: 'bold',
+      color: 'white',
       marginBottom: '0.5rem'
     },
     statLabel: {
-      fontSize: '1.125rem',
-      opacity: 0.9
+      color: '#d1d5db',
+      fontSize: '1.1rem'
     },
+
+    // Contact Section - STYLES MIS À JOUR DEPUIS CONTACTPAGE
     contactSection: {
-      padding: '5rem 0',
-      backgroundColor: 'white'
+      padding: '6rem 0',
+      backgroundColor: '#f9fafb'
     },
     contactGrid: {
       display: 'grid',
-      gridTemplateColumns: '1fr 1fr',
-      gap: '3rem',
-      alignItems: 'center'
-    },
-    contactInfo: {
+      gridTemplateColumns: '1fr',
+      gap: '2rem',
       marginBottom: '2rem'
     },
+    contactInfoSection: {
+      background: 'white',
+      borderRadius: '16px',
+      padding: '1.5rem',
+      boxShadow: '0 10px 25px -3px rgba(0, 0, 0, 0.1)',
+      order: 2
+    },
     contactTitle: {
-      fontSize: '2.5rem',
+      fontSize: 'clamp(1.5rem, 4vw, 2rem)',
       fontWeight: 'bold',
       color: '#111827',
-      marginBottom: '1.5rem'
+      marginBottom: '1.5rem',
+      display: 'flex',
+      alignItems: 'center',
+      gap: '0.75rem',
+      flexWrap: 'wrap'
     },
     contactDescription: {
-      fontSize: '1.25rem',
       color: '#6b7280',
+      fontSize: '1.1rem',
+      lineHeight: '1.6',
       marginBottom: '2rem'
     },
     contactItems: {
@@ -448,253 +573,303 @@ const KastlerHomepage = () => {
     },
     contactItem: {
       display: 'flex',
-      alignItems: 'center'
+      alignItems: 'flex-start',
+      gap: '1rem',
+      marginBottom: '1.5rem',
+      padding: '1rem',
+      borderRadius: '12px',
+      transition: 'all 0.3s'
     },
     contactIcon: {
       width: '48px',
       height: '48px',
-      borderRadius: '8px',
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
-      marginRight: '1rem'
+      flexShrink: 0
     },
-    contactForm: {
-      backgroundColor: '#f9fafb',
+    contactText: {
+      flex: 1,
+      minWidth: 0
+    },
+    contactItemTitle: {
+      fontWeight: '600',
+      color: '#111827',
+      marginBottom: '0.25rem',
+      fontSize: 'clamp(0.875rem, 2vw, 1rem)'
+    },
+    contactContent: {
+      color: '#6b7280',
+      fontSize: 'clamp(0.75rem, 2vw, 0.875rem)',
+      wordBreak: 'break-word'
+    },
+    formSection: {
+      background: 'white',
       borderRadius: '16px',
-      padding: '2rem'
+      padding: '1.5rem',
+      boxShadow: '0 10px 25px -3px rgba(0, 0, 0, 0.1)',
+      order: 1
     },
     formTitle: {
-      fontSize: '1.5rem',
+      fontSize: 'clamp(1.5rem, 4vw, 2rem)',
       fontWeight: 'bold',
       color: '#111827',
-      marginBottom: '1.5rem'
+      marginBottom: '1.5rem',
+      display: 'flex',
+      alignItems: 'center',
+      gap: '0.75rem'
     },
-    formGroup: {
-      marginBottom: '1rem'
+    form: {
+      display: 'flex',
+      flexDirection: 'column',
+      gap: '1rem'
     },
     formRow: {
       display: 'grid',
-      gridTemplateColumns: '1fr 1fr',
-      gap: '1rem',
-      marginBottom: '1rem'
+      gridTemplateColumns: '1fr',
+      gap: '1rem'
+    },
+    formGroup: {
+      display: 'flex',
+      flexDirection: 'column'
+    },
+    label: {
+      fontSize: '0.875rem',
+      fontWeight: '600',
+      color: '#374151',
+      marginBottom: '0.5rem'
     },
     formInput: {
-      width: '100%',
       padding: '0.75rem 1rem',
       border: '1px solid #d1d5db',
       borderRadius: '8px',
       outline: 'none',
-      transition: 'border-color 0.3s'
+      transition: 'all 0.3s',
+      fontSize: '1rem',
+      width: '100%',
+      boxSizing: 'border-box'
     },
     formTextarea: {
-      width: '100%',
       padding: '0.75rem 1rem',
       border: '1px solid #d1d5db',
       borderRadius: '8px',
       outline: 'none',
+      transition: 'all 0.3s',
+      minHeight: '120px',
       resize: 'vertical',
-      minHeight: '100px',
-      transition: 'border-color 0.3s'
-    },
-    formButton: {
+      fontSize: '1rem',
       width: '100%',
-      background: 'linear-gradient(to right, #2563eb, #7c3aed)',
-      color: 'white',
-      padding: '0.75rem',
+      boxSizing: 'border-box'
+    },
+    formSelect: {
+      padding: '0.75rem 1rem',
+      border: '1px solid #d1d5db',
       borderRadius: '8px',
+      outline: 'none',
+      transition: 'all 0.3s',
+      fontSize: '1rem',
+      backgroundColor: 'white',
+      width: '100%',
+      boxSizing: 'border-box'
+    },
+    submitButton: {
+      background: 'linear-gradient(to right, #e60039, #8a2be2)',
+      color: 'white',
+      padding: '1rem 2rem',
+      borderRadius: '12px',
       border: 'none',
       fontWeight: '600',
       cursor: 'pointer',
-      transition: 'all 0.3s'
+      transition: 'all 0.3s',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: '0.5rem',
+      fontSize: '1rem',
+      width: '100%'
     },
-    footer: {
-      backgroundColor: '#111827',
-      color: 'white',
-      padding: '3rem 0'
+    statusMessage: {
+      padding: '1rem',
+      borderRadius: '8px',
+      marginBottom: '1rem',
+      display: 'flex',
+      alignItems: 'center',
+      gap: '0.5rem',
+      fontSize: '0.875rem',
+      fontWeight: '500'
     },
-    footerGrid: {
-      display: 'grid',
-      gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))',
-      gap: '2rem'
+    successMessage: {
+      backgroundColor: '#dcfce7',
+      color: '#166534',
+      border: '1px solid #bbf7d0'
     },
-    footerSection: {
-      marginBottom: '1rem'
+    errorMessage: {
+      backgroundColor: '#fecaca',
+      color: '#991b1b',
+      border: '1px solid #fca5a5'
     },
-    footerTitle: {
-      fontSize: '1.125rem',
-      fontWeight: '600',
-      marginBottom: '1rem'
-    },
-    footerLinks: {
-      listStyle: 'none',
-      padding: 0
-    },
-    footerLink: {
-      color: '#9ca3af',
-      textDecoration: 'none',
-      display: 'block',
-      padding: '0.25rem 0',
-      transition: 'color 0.3s'
-    },
-    footerBottom: {
-      borderTop: '1px solid #374151',
-      marginTop: '2rem',
-      paddingTop: '2rem',
+    section: {
+      position: 'relative',
+      backgroundColor: '#f4f4f4',
+      padding: '100px 20px',
       textAlign: 'center',
-      color: '#9ca3af'
+      overflow: 'hidden',
+    },
+    bgText: {
+      fontSize: '72px',
+      fontWeight: 900,
+      color: '#ddd',
+      textTransform: 'uppercase',
+      margin: 0,
+      zIndex: 0,
+    },
+    frontText: {
+      position: 'absolute',
+      top: '50%',
+      left: '50%',
+      transform: 'translate(-50%, -50%)',
+      fontSize: '28px',
+      fontWeight: '700',
+      color: '#222',
+      margin: 0,
+      zIndex: 1,
     }
   };
 
   return (
-    <div style={styles.container}>
-      {/* Header */}
-      <header style={styles.header}>
-        <nav style={styles.navContainer}>
-          <div style={styles.navContent}>
-            {/* Logo */}
-            <div style={styles.logo}>
-              <div style={styles.logoIcon}>
-                <GraduationCap size={28} />
-              </div>
-              <div style={styles.logoText}>
-                <h1 style={styles.logoTitle}>Alfred Kastler</h1>
-                <p style={styles.logoSubtitle}>Excellence Éducative</p>
-              </div>
-            </div>
-
-            {/* Desktop Menu */}
-            <div style={{...styles.desktopMenu, display: window.innerWidth >= 1024 ? 'flex' : 'none'}}>
-              <a href="#accueil" style={styles.menuLink}>Accueil</a>
-              <a href="#cycles" style={styles.menuLink}>Cycles</a>
-              <a href="#vie-scolaire" style={styles.menuLink}>Vie Scolaire</a>
-              <a href="#actualites" style={styles.menuLink}>Actualités</a>
-              <a href="#contact" style={styles.menuLink}>Contact</a>
-              <button 
-                style={styles.loginBtn}
-                onClick={() => navigate('/login')}
-                title="Se connecter"
-              >
-                <LogIn size={20} />
-              </button>
-            </div>
-
-            {/* Mobile Menu Button */}
-            <button 
-              style={{...styles.mobileMenuBtn, display: window.innerWidth < 1024 ? 'block' : 'none'}}
-              onClick={() => setIsMenuOpen(!isMenuOpen)}
-            >
-              {isMenuOpen ? <X size={24} /> : <Menu size={24} />}
-            </button>
-          </div>
-
-          {/* Mobile Menu */}
-          {isMenuOpen && (
-            <div style={styles.mobileMenu}>
-              <a href="#accueil" style={styles.mobileMenuLink}>Accueil</a>
-              <a href="#cycles" style={styles.mobileMenuLink}>Cycles</a>
-              <a href="#vie-scolaire" style={styles.mobileMenuLink}>Vie Scolaire</a>
-              <a href="#actualites" style={styles.mobileMenuLink}>Actualités</a>
-              <a href="#contact" style={styles.mobileMenuLink}>Contact</a>
-              <button 
-                style={{...styles.loginBtn, width: '100%', marginTop: '0.5rem', borderRadius: '8px'}}
-                onClick={() => navigate('/login')}
-              >
-                <LogIn size={20} style={{marginRight: '0.5rem'}} />
-                Se connecter
-              </button>
-            </div>
-          )}
-        </nav>
-      </header>
-
+    <div>
+      <Navbar />
+      
       {/* Hero Section */}
-      <section style={styles.heroSection}>
-        <div style={styles.heroBackground}>
-          <div style={styles.heroOverlay}></div>
-        </div>
+      <section id="accueil" style={styles.heroSection}>
+        <div style={styles.heroOverlay}></div>
         
         <div style={styles.heroContent}>
-          <div style={styles.heroInner}>
-            <h1 style={styles.heroTitle}>
-              {slides[currentSlide].title}
-            </h1>
-            <p style={styles.heroSubtitle}>
-              {slides[currentSlide].subtitle}
-            </p>
-            <div style={styles.heroButtons}>
-              <button style={styles.heroBtn1}>
-                Découvrir nos Cycles
-              </button>
-              <button style={styles.heroBtn2}>
-                Visite Virtuelle
-              </button>
-            </div>
+          <div style={styles.cardsRow}>
+            {educationCards.map((card, index) => (
+              <div 
+                key={card.id}
+                style={{
+                  ...styles.educationCard,
+                  animationDelay: `${0.2 + index * 0.2}s`
+                }}
+                className="education-card"
+                onClick={() => handleHeroCardClick(card)}
+              >
+                <img 
+                  src={card.image} 
+                  alt={card.title}
+                  style={styles.cardImage}
+                  className="card-image"
+                />
+                <div style={styles.cardOverlay}>
+                  <div style={styles.cardIcon} className="card-icon">
+                    {card.icon}
+                  </div>
+                  <h3 style={styles.cardTitle}>{card.title}</h3>
+                </div>
+              </div>
+            ))}
           </div>
         </div>
+      </section>
+      
+      <section style={styles.section}>
+        <h1 style={styles.bgText}>Groupe Scolaire </h1>
+        <h2 style={styles.frontText}>Alfred Kastler</h2>
+      </section>
 
-        {/* Slide Indicators */}
-        <div style={styles.slideIndicators}>
-          {slides.map((_, index) => (
-            <button
-              key={index}
-              style={{
-                ...styles.slideIndicator,
-                backgroundColor: index === currentSlide ? 'white' : 'rgba(255, 255, 255, 0.5)'
-              }}
-              onClick={() => setCurrentSlide(index)}
+      <section className="kastler-about-section">
+        <div className="kastler-container">
+          <div className="kastler-image">
+            <img
+              src="images/abdo.png"
+              alt="Groupe Scolaire Alfred Kastler"
+              className="floating-image"
             />
-          ))}
-        </div>
-      </section>
+          </div>
 
-      {/* Features Section */}
-      <section style={styles.featuresSection}>
-        <div style={styles.sectionContainer}>
-          <div style={styles.sectionHeader}>
-            <h2 style={styles.sectionTitle}>Pourquoi Choisir Alfred Kastler ?</h2>
-            <p style={styles.sectionSubtitle}>
-              Depuis notre création, nous nous engageons à offrir une éducation d'excellence dans un environnement stimulant et bienveillant.
+          <div className="kastler-text">
+            <h1 className="kastler-subtitle">Groupe Scolaire</h1>
+            <h2 className="kastler-title">Alfred Kastler Casablanca</h2>
+            <p>
+              Le Groupe Scolaire Alfred Kastler s'engage à offrir une éducation d'excellence,
+              de la petite enfance jusqu'au lycée. Notre approche pédagogique innovante,
+              encadrée par une équipe passionnée, permet à chaque élève de s'épanouir pleinement
+              dans un environnement bienveillant, moderne et multiculturel.
             </p>
-          </div>
-
-          <div style={styles.featuresGrid}>
-            {features.map((feature, index) => (
-              <div key={index} style={styles.featureCard}>
-                <div style={styles.featureIcon}>
-                  {feature.icon}
-                </div>
-                <h3 style={styles.featureTitle}>{feature.title}</h3>
-                <p style={styles.featureDescription}>{feature.description}</p>
-              </div>
-            ))}
+            <a href="/propos" className="kastler-button">Voir plus</a>
           </div>
         </div>
       </section>
 
-      {/* Cycles Section */}
+      {/* Cycles Section - REMPLACÉE PAR CELLE DE CYCLESPAGE */}
       <section id="cycles" style={styles.cyclesSection}>
-        <div style={styles.sectionContainer}>
-          <div style={styles.sectionHeader}>
-            <h2 style={styles.sectionTitle}>Nos Cycles d'Enseignement</h2>
-            <p style={styles.sectionSubtitle}>Un parcours éducatif complet de la petite enfance au baccalauréat</p>
-          </div>
-
-          <div style={styles.cyclesGrid}>
-            {cycles.map((cycle, index) => (
-              <div key={index} style={styles.cycleCard}>
-                <div style={{...styles.cycleIcon, background: cycle.gradient}}>
-                  {cycle.icon}
+        <div style={styles.cyclesRow} className="cycles-row">
+          {cycles.map((cycle, index) => (
+            <div 
+              key={cycle.id}
+              style={{
+                ...styles.cycleCard,
+                ...(index === cycles.length - 1 ? styles.cycleCardLast : {})
+              }}
+              className={`cycle-card cycle-${cycle.id}`}
+              onClick={() => handleCardClick(cycle)}
+            >
+              <div style={styles.cardContent}>
+                <div 
+                  style={styles.cycleIcon}
+                  className="cycle-icon"
+                >
+                  {typeof cycle.icon === 'string' ? (
+                    <img
+                      src={cycle.icon}
+                      alt={cycle.title}
+                      style={{ width: '65px', height: '65px', objectFit: 'contain' }}
+                    />
+                  ) : (
+                    React.cloneElement(cycle.icon, {
+                      color: 'black',
+                      className: 'cycle-icon-svg',
+                      style: { transition: 'all 0.3s ease' }
+                    })
+                  )}
                 </div>
-                <h3 style={styles.cycleTitle}>{cycle.title}</h3>
-                <p style={styles.cycleAge}>{cycle.age}</p>
-                <p style={styles.cycleDescription}>{cycle.description}</p>
-                <a href="#" style={styles.cycleLink}>
-                  En savoir plus <ChevronRight size={16} style={{marginLeft: '0.25rem'}} />
-                </a>
+
+                <h5 style={styles.cycleTitle} className="cycle-title">
+                  {cycle.title}
+                </h5>
+
+                <div style={styles.cycleSubtitle} className="cycle-subtitle">
+                  {cycle.subtitle}
+                </div>
+
+                <div style={styles.divider}></div>
+
+                <p style={styles.cycleDescription} className="cycle-description">
+                  {cycle.description}
+                </p>
+
+                <ul style={styles.featuresList} className="features-list">
+                  {cycle.features.map((feature, idx) => (
+                    <li key={idx} style={styles.featureItem}>
+                      <div style={styles.featureBullet}></div>
+                      <span>{feature}</span>
+                    </li>
+                  ))}
+                </ul>
+
+                <div 
+                  style={styles.cycleButton}
+                  className="cycle-button"
+                  onClick={(e) => handleDiscoverClick(e, cycle)}
+                >
+                  <span>Découvrir</span>
+                  <ArrowRight size={16} />
+                </div>
               </div>
-            ))}
-          </div>
+            </div>
+          ))}
         </div>
       </section>
 
@@ -722,182 +897,349 @@ const KastlerHomepage = () => {
         </div>
       </section>
 
-      {/* Contact Info */}
-      <section style={styles.contactSection}>
+      {/* Contact Section - REMPLACÉE PAR CELLE DE CONTACTPAGE */}
+      <section id="contact" style={styles.contactSection}>
         <div style={styles.sectionContainer}>
-          <div style={styles.contactGrid}>
-            <div>
-              <h2 style={styles.contactTitle}>Contactez-Nous</h2>
+          <div style={styles.contactGrid} className="contact-grid">
+            {/* Contact Information */}
+            <div style={styles.contactInfoSection} className="contact-info-section">
+              <h2 style={styles.contactTitle}>
+                <MapPin size={24} color="#6f42c1" />
+                Informations de Contact
+              </h2>
               <p style={styles.contactDescription}>
                 Nous sommes à votre disposition pour répondre à toutes vos questions et vous accompagner dans vos démarches d'inscription.
               </p>
               
               <div style={styles.contactItems}>
-                <div style={styles.contactItem}>
-                  <div style={{...styles.contactIcon, backgroundColor: '#dbeafe'}}>
-                    <MapPin size={24} color="#2563eb" />
+                {contactInfo.map((item, index) => (
+                  <div 
+                    key={index} 
+                    style={styles.contactItem}
+                    className="contact-item"
+                  >
+                    <div style={styles.contactIcon}>
+                      {typeof item.icon === 'string' ? (
+                        <img 
+                          src={item.icon}
+                          alt={item.title}
+                          style={{
+                            width: '38px',
+                            height: '38px',
+                            objectFit: 'contain'
+                          }}
+                        />
+                      ) : (
+                        React.cloneElement(item.icon, { color: 'white', size: 24 })
+                      )}
+                    </div>
+
+                    <div style={styles.contactText}>
+                      <div style={styles.contactItemTitle}>{item.title}</div>
+                      <div style={styles.contactContent}>{item.content}</div>
+                    </div>
                   </div>
-                  <div>
-                    <p style={{fontWeight: '600', color: '#111827'}}>Adresse</p>
-                    <p style={{color: '#6b7280'}}>130, Boulevard Ali Yaàta, Hay Al Mohammadi, Casablanca</p>
-                  </div>
-                </div>
-                
-                <div style={styles.contactItem}>
-                  <div style={{...styles.contactIcon, backgroundColor: '#dcfce7'}}>
-                    <Phone size={24} color="#059669" />
-                  </div>
-                  <div>
-                    <p style={{fontWeight: '600', color: '#111827'}}>Téléphone</p>
-                    <p style={{color: '#6b7280'}}>+212 5 22 62 81 82</p>
-                  </div>
-                </div>
-                
-                <div style={styles.contactItem}>
-                  <div style={{...styles.contactIcon, backgroundColor: '#f3e8ff'}}>
-                    <Mail size={24} color="#7c3aed" />
-                  </div>
-                  <div>
-                    <p style={{fontWeight: '600', color: '#111827'}}>Email</p>
-                    <p style={{color: '#6b7280'}}>contact@kastler.ma</p>
-                  </div>
-                </div>
-                
-                <div style={styles.contactItem}>
-                  <div style={{...styles.contactIcon, backgroundColor: '#fed7aa'}}>
-                    <Clock size={24} color="#ea580c" />
-                  </div>
-                  <div>
-                    <p style={{fontWeight: '600', color: '#111827'}}>Horaires</p>
-                    <p style={{color: '#6b7280'}}>Lun - Sam: 07:00 - 17:00</p>
-                  </div>
-                </div>
+                ))}
               </div>
             </div>
             
-            <div style={styles.contactForm}>
-              <h3 style={styles.formTitle}>Demande d'Information</h3>
-              <div>
-                <div style={styles.formRow}>
-                  <input 
-                    type="text" 
-                    placeholder="Nom" 
-                    style={styles.formInput}
-                  />
-                  <input 
-                    type="text" 
-                    placeholder="Prénom" 
-                    style={styles.formInput}
-                  />
+            {/* Contact Form */}
+            <div style={styles.formSection} className="form-section">
+              <h3 style={styles.formTitle}>
+                <MessageSquare size={24} color="#6f42c1" />
+                Envoyez-nous un Message
+              </h3>
+              
+              {/* Status Messages */}
+              {submitStatus === 'success' && (
+                <div style={{...styles.statusMessage, ...styles.successMessage}}>
+                  <CheckCircle size={20} />
+                  Message envoyé avec succès ! Nous vous répondrons dans les plus brefs délais.
                 </div>
-                <div style={styles.formGroup}>
-                  <input 
-                    type="email" 
-                    placeholder="Email" 
-                    style={styles.formInput}
-                  />
+              )}
+              
+              {submitStatus === 'error' && (
+                <div style={{...styles.statusMessage, ...styles.errorMessage}}>
+                  <AlertCircle size={20} />
+                  Erreur lors de l'envoi du message. Veuillez réessayer.
                 </div>
-                <div style={styles.formGroup}>
-                  <input 
-                    type="tel" 
-                    placeholder="Téléphone" 
-                    style={styles.formInput}
-                  />
+              )}
+              
+              <form onSubmit={handleSubmit} style={styles.form}>
+                <div style={styles.formRow} className="form-row">
+                  <div style={styles.formGroup}>
+                    <label style={styles.label}>Prénom *</label>
+                    <input
+                      type="text"
+                      name="firstName"
+                      value={formData.firstName}
+                      onChange={handleInputChange}
+                      style={styles.formInput}
+                      className="form-input"
+                      required
+                      placeholder="Votre prénom"
+                      disabled={isSubmitting}
+                    />
+                  </div>
+                  <div style={styles.formGroup}>
+                    <label style={styles.label}>Nom *</label>
+                    <input
+                      type="text"
+                      name="lastName"
+                      value={formData.lastName}
+                      onChange={handleInputChange}
+                      style={styles.formInput}
+                      className="form-input"
+                      required
+                      placeholder="Votre nom"
+                      disabled={isSubmitting}
+                    />
+                  </div>
                 </div>
-                <div style={styles.formGroup}>
-                  <select style={styles.formInput}>
-                    <option>Cycle souhaité</option>
-                    <option>Crèche & Préscolaire</option>
-                    <option>École Primaire</option>
-                    <option>Collège</option>
-                    <option>Lycée</option>
-                  </select>
+
+                <div style={styles.formRow} className="form-row">
+                  <div style={styles.formGroup}>
+                    <label style={styles.label}>Email *</label>
+                    <input
+                      type="email"
+                      name="email"
+                      value={formData.email}
+                      onChange={handleInputChange}
+                      style={styles.formInput}
+                      className="form-input"
+                      required
+                      placeholder="votre@email.com"
+                      disabled={isSubmitting}
+                    />
+                  </div>
+                  <div style={styles.formGroup}>
+                    <label style={styles.label}>Téléphone</label>
+                    <input
+                      type="tel"
+                      name="phone"
+                      value={formData.phone}
+                      onChange={handleInputChange}
+                      style={styles.formInput}
+                      className="form-input"
+                      placeholder="+212 6 XX XX XX XX"
+                      disabled={isSubmitting}
+                    />
+                  </div>
                 </div>
+
+                <div style={styles.formRow} className="form-row">
+                  <div style={styles.formGroup}>
+                    <label style={styles.label}>Cycle d'Intérêt</label>
+                    <select
+                      name="cycle"
+                      value={formData.cycle}
+                      onChange={handleInputChange}
+                      style={styles.formSelect}
+                      className="form-input"
+                      disabled={isSubmitting}
+                    >
+                      <option value="">Sélectionnez un cycle</option>
+                      <option value="creche">Crèche & Préscolaire</option>
+                      <option value="primaire">École Primaire</option>
+                      <option value="college">Collège</option>
+                      <option value="lycee">Lycée</option>
+                    </select>
+                  </div>
+                  <div style={styles.formGroup}>
+                    <label style={styles.label}>Sujet *</label>
+                    <select
+                      name="subject"
+                      value={formData.subject}
+                      onChange={handleInputChange}
+                      style={styles.formSelect}
+                      className="form-input"
+                      required
+                      disabled={isSubmitting}
+                    >
+                      <option value="">Choisir un sujet</option>
+                      <option value="inscription">Demande d'Inscription</option>
+                      <option value="information">Demande d'Information</option>
+                      <option value="visite">Visite de l'École</option>
+                      <option value="rendez-vous">Prise de Rendez-vous</option>
+                      <option value="autre">Autre</option>
+                    </select>
+                  </div>
+                </div>
+
                 <div style={styles.formGroup}>
-                  <textarea 
-                    placeholder="Votre message" 
+                  <label style={styles.label}>Message *</label>
+                  <textarea
+                    name="message"
+                    value={formData.message}
+                    onChange={handleInputChange}
                     style={styles.formTextarea}
-                  ></textarea>
+                    className="form-textarea"
+                    required
+                    placeholder="Décrivez votre demande en détail..."
+                    disabled={isSubmitting}
+                  />
                 </div>
-                <button style={styles.formButton}>
-                  Envoyer la Demande
+
+                <button 
+                  type="submit" 
+                  style={styles.submitButton}
+                  className="submit-button"
+                  disabled={isSubmitting}
+                >
+                  {isSubmitting ? (
+                    <>Envoi en cours...</>
+                  ) : (
+                    <>
+                      <Send size={20} />
+                      Envoyer le Message
+                    </>
+                  )}
                 </button>
-              </div>
+              </form>
             </div>
           </div>
         </div>
       </section>
 
-      {/* Footer */}
-      <footer style={styles.footer}>
-        <div style={styles.sectionContainer}>
-          <div style={styles.footerGrid}>
-            <div>
-              <div style={styles.logo}>
-                <div style={{...styles.logoIcon, width: '40px', height: '40px'}}>
-                  <GraduationCap size={24} />
-                </div>
-                <div style={styles.logoText}>
-                  <h3 style={{fontSize: '1.125rem', fontWeight: 'bold'}}>Alfred Kastler</h3>
-                  <p style={{fontSize: '0.875rem', color: '#9ca3af'}}>Excellence Éducative</p>
-                </div>
-              </div>
-              <p style={{color: '#9ca3af', marginTop: '1rem'}}>
-                Groupe scolaire d'excellence situé à Casablanca, offrant un parcours éducatif complet de la crèche au lycée.
-              </p>
-            </div>
-            
-            <div>
-              <h4 style={styles.footerTitle}>Cycles</h4>
-              <ul style={styles.footerLinks}>
-                <li><a href="#" style={styles.footerLink}>Crèche & Préscolaire</a></li>
-                <li><a href="#" style={styles.footerLink}>École Primaire</a></li>
-                <li><a href="#" style={styles.footerLink}>Collège</a></li>
-                <li><a href="#" style={styles.footerLink}>Lycée</a></li>
-              </ul>
-            </div>
-            
-            <div>
-              <h4 style={styles.footerTitle}>Services</h4>
-              <ul style={styles.footerLinks}>
-                <li><a href="#" style={styles.footerLink}>Transport Scolaire</a></li>
-                <li><a href="#" style={styles.footerLink}>Restauration</a></li>
-                <li><a href="#" style={styles.footerLink}>Activités Périscolaires</a></li>
-                <li><a href="#" style={styles.footerLink}>Soutien Scolaire</a></li>
-              </ul>
-            </div>
-            
-            <div>
-              <h4 style={styles.footerTitle}>Contact</h4>
-              <div style={{color: '#9ca3af'}}>
-                <p>130, Bd Ali Yaàta</p>
-                <p>Hay Al Mohammadi, Casablanca</p>
-                <p>+212 5 22 62 81 82</p>
-                <p>contact@kastler.ma</p>
-              </div>
-            </div>
-          </div>
-          
-          <div style={styles.footerBottom}>
-            <p>&copy; 2025 Groupe Scolaire Alfred Kastler. Tous droits réservés.</p>
-          </div>
-        </div>
-      </footer>
+      {/* Footer Component */}
+      <Footer />
+
+      {/* Floating Action Buttons */}
+      <ScrollToTop />
+      <SocialFAB />
 
       <style jsx>{`
-        @keyframes fadeIn {
+        .kastler-about-section {
+          padding: 40px 0 20px;
+          background-color: #fff;
+        }
+
+        .kastler-container {
+          max-width: 1200px;
+          margin: 0 auto;
+          padding: 0 20px;
+          display: flex;
+          flex-wrap: wrap;
+          align-items: flex-start;
+          justify-content: space-between;
+          gap: 20px;
+        }
+
+        .kastler-image {
+          flex: 1 1 100%;
+          margin: 0;
+          padding: 0;
+        }
+
+        .kastler-image img {
+          width: 100%;
+          height: auto;
+          border-radius: 20px;
+          display: block;
+          margin: 0 auto;
+          box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+        }
+
+        .kastler-text {
+          flex: 1 1 100%;
+          margin: 0;
+          padding: 0;
+          text-align: center;
+        }
+
+        .kastler-subtitle {
+          color: #6b21a8;
+          font-size: 16px;
+          margin-top: 20px;
+          margin-bottom: 10px;
+          text-transform: uppercase;
+        }
+
+        .kastler-title {
+          font-size: 28px;
+          font-weight: bold;
+          color: #111;
+          margin-bottom: 15px;
+        }
+
+        .kastler-text p {
+          font-size: 16px;
+          line-height: 1.7;
+          color: #333;
+          margin-bottom: 25px;
+          padding: 0 10px;
+        }
+
+        .kastler-button {
+          background-color: #6b21a8;
+          color: white;
+          padding: 12px 24px;
+          border: none;
+          border-radius: 30px;
+          font-weight: bold;
+          cursor: pointer;
+          text-decoration: none;
+          display: inline-block;
+        }
+
+        .kastler-button:hover {
+          background-color: #4c1781;
+        }
+
+        /* Animation */
+        @keyframes float {
+          0%, 100% {
+            transform: translateY(0) scale(1);
+          }
+          50% {
+            transform: translateY(-8px) scale(1.03);
+          }
+        }
+
+        .floating-image {
+          animation: float 3s ease-in-out infinite;
+          transition: transform 0.3s ease;
+        }
+
+        .floating-image:hover {
+          transform: scale(1.05);
+        }
+
+        @keyframes fadeZoomIn {
           from {
             opacity: 0;
-            transform: translateY(30px);
+            transform: scale(0.8);
+          }
+          to {
+            opacity: 1;
+            transform: scale(1);
+          }
+        }
+
+        @keyframes fadeInUp {
+          from {
+            opacity: 0;
+            transform: translateY(20px);
           }
           to {
             opacity: 1;
             transform: translateY(0);
           }
         }
-        
-        .hero-title {
-          animation: fadeIn 1s ease-out forwards;
+
+        .education-card:hover {
+          transform: scale(1.05);
+          box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
+        }
+
+        .education-card:hover .card-image {
+          transform: scale(1.1);
+        }
+
+        .education-card:hover .card-icon {
+          background: white !important;
+          color: red !important;
+          transform: scale(1.1);
         }
 
         .feature-card:hover .feature-icon {
@@ -905,24 +1247,10 @@ const KastlerHomepage = () => {
           box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
         }
 
-        .cycle-card:hover {
-          transform: translateY(-8px);
-          box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
-        }
-
-        .hero-btn1:hover {
-          transform: scale(1.05);
-          box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
-        }
-
-        .hero-btn2:hover {
-          background: white;
-          color: #111827;
-        }
-
-        .login-btn:hover {
-          transform: scale(1.05);
-          box-shadow: 0 10px 25px -3px rgba(0, 0, 0, 0.2);
+        /* Contact Form Styles - MIS À JOUR DEPUIS CONTACTPAGE */
+        .contact-item:hover {
+          background-color: #f9fafb;
+          transform: translateX(5px);
         }
 
         .form-input:focus,
@@ -931,33 +1259,186 @@ const KastlerHomepage = () => {
           box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
         }
 
-        .form-button:hover {
-          transform: scale(1.05);
+        .form-input:disabled,
+        .form-textarea:disabled {
+          background-color: #f3f4f6;
+          cursor: not-allowed;
+        }
+
+        .submit-button:hover:not(:disabled) {
+          transform: translateY(-2px);
           box-shadow: 0 10px 25px -3px rgba(0, 0, 0, 0.1);
         }
 
-        .menu-link:hover {
-          color: #2563eb;
+        .submit-button:disabled {
+          opacity: 0.7;
+          cursor: not-allowed;
+          transform: none;
         }
 
-        .mobile-menu-link:hover {
-          color: #2563eb;
+        /* Styles pour les cycles - REPRIS DE CYCLESPAGE */
+        .cycle-card {
+          animation: fadeInUp 0.8s ease forwards;
+          opacity: 0;
         }
 
-        .cycle-link:hover {
-          color: #1d4ed8;
+        .cycle-card:nth-child(1) {
+          animation-delay: 0.2s;
+        }
+        .cycle-card:nth-child(2) {
+          animation-delay: 0.4s;
+        }
+        .cycle-card:nth-child(3) {
+          animation-delay: 0.6s;
+        }
+        .cycle-card:nth-child(4) {
+          animation-delay: 0.8s;
         }
 
-        .footer-link:hover {
-          color: white;
+        .cycle-card::before {
+          content: "";
+          position: absolute;
+          inset: 0;
+          background-size: cover;
+          background-position: center;
+          background-repeat: no-repeat;
+          opacity: 0;
+          transition: opacity 0.3s ease;
+          z-index: 0;
         }
 
-        @media (max-width: 1024px) {
-          .desktop-menu {
-            display: none !important;
+        .cycle-card::after {
+          content: "";
+          position: absolute;
+          inset: 0;
+          opacity: 0;
+          transition: opacity 0.3s ease;
+          z-index: 1;
+        }
+
+        .cycle-card:hover::before {
+          opacity: 1;
+        }
+
+        .cycle-card:hover::after {
+          opacity: 1;
+        }
+
+        .cycle-card:hover .cycle-icon {
+          transform: scale(1.1);
+        }
+
+        .cycle-card:hover .cycle-title {
+          transform: scale(1.1);
+          font-weight: 800;
+          color: #fff !important;
+        }
+
+        .cycle-card:hover .cycle-subtitle {
+          color: #fff !important;
+          font-weight: 700;
+        }
+
+        .cycle-card:hover .cycle-description {
+          color: #fff !important;
+          font-weight: 600;
+        }
+
+        .cycle-card:hover .features-list {
+          transform: scale(1.05);
+          font-weight: 600;
+          color: #fff !important;
+        }
+
+        .cycle-card:hover .cycle-button {
+          background: white !important;
+          border: 2px solid white !important;
+          color: #333 !important;
+        }
+
+        .cycle-button svg {
+          transition: transform 0.3s ease;
+        }
+
+        .cycle-button:hover svg {
+          transform: translateX(3px);
+        }
+
+        /* Background images pour chaque cycle */
+        .cycle-creche::before {
+          background-image: url('images/child-315049_640.jpg');
+        }
+
+        .cycle-creche::after {
+          background-color: #FF6B6BCC;
+        }
+
+        .cycle-primaire::before {
+          background-image: url('images/istockphoto-1194312917-612x612.jpg');
+        }
+
+        .cycle-primaire::after {
+          background-color: #4ECDC4CC;
+        }
+        
+        .cycle-college::before {
+          background-image: url('images/istockphoto-2184618859-612x612.jpg');
+        }
+
+        .cycle-college::after {
+          background-color: #45B7D1CC;
+        }
+
+        .cycle-lycee::before {
+          background-image: url('images/graduation-4502796_640.jpg');
+        }
+
+        .cycle-lycee::after {
+          background-color: #96CEB4CC;
+        }
+
+        /* Responsive design */
+        @media (min-width: 640px) {
+          .form-row {
+            grid-template-columns: 1fr 1fr !important;
           }
-          .mobile-menu-btn {
-            display: block !important;
+        }
+        
+        @media (min-width: 768px) {
+          .kastler-container {
+            flex-wrap: nowrap;
+            flex-direction: row;
+            align-items: center;
+          }
+
+          .kastler-image,
+          .kastler-text {
+            flex: 1 1 50%;
+            text-align: left;
+          }
+
+          .kastler-text p {
+            padding: 0;
+          }
+        }
+        
+        @media (min-width: 1024px) {
+          .contact-grid {
+            grid-template-columns: 1fr 1fr !important;
+            gap: 3rem !important;
+          }
+          .contact-info-section {
+            order: 1 !important;
+          }
+          .form-section {
+            order: 2 !important;
+          }
+        }
+
+        @media (max-width: 992px) {
+          .cycle-card {
+            width: 50% !important;
+            min-height: 75vh !important;
           }
         }
 
@@ -966,19 +1447,7 @@ const KastlerHomepage = () => {
             flex-direction: column;
           }
           
-          .contact-grid {
-            grid-template-columns: 1fr !important;
-          }
-          
-          .form-row {
-            grid-template-columns: 1fr !important;
-          }
-          
           .features-grid {
-            grid-template-columns: 1fr !important;
-          }
-          
-          .cycles-grid {
             grid-template-columns: 1fr !important;
           }
           
@@ -987,17 +1456,38 @@ const KastlerHomepage = () => {
           }
         }
 
-        @media (max-width: 480px) {
+        @media (max-width: 576px) {
+          .cycles-row {
+            flex-direction: column !important;
+          }
+
+          .cycle-card {
+            width: 100% !important;
+            min-height: auto !important;
+            padding: 30px 20px !important;
+          }
+
+          .cycle-icon {
+            width: 55px !important;
+            height: 55px !important;
+          }
+
+          .cycle-title {
+            font-size: 18px !important;
+          }
+
+          .features-list {
+            font-size: 14px !important;
+            text-align: center !important;
+          }
+
+          .cycle-button {
+            font-size: 13px !important;
+            padding: 12px 18px !important;
+          }
+
           .stats-grid {
             grid-template-columns: 1fr !important;
-          }
-          
-          .hero-title {
-            font-size: 3rem !important;
-          }
-          
-          .hero-subtitle {
-            font-size: 1.25rem !important;
           }
           
           .section-title {
@@ -1006,6 +1496,55 @@ const KastlerHomepage = () => {
           
           .contact-title {
             font-size: 2rem !important;
+          }
+        }
+
+        @media (max-width: 480px) {
+          .education-card {
+            width: 95% !important;
+            height: 160px !important;
+          }
+          
+          .card-title {
+            font-size: 16px !important;
+          }
+          
+          .card-icon {
+            width: 40px !important;
+            height: 40px !important;
+            top: 12px !important;
+            right: 12px !important;
+          }
+
+          .stats-grid {
+            grid-template-columns: 1fr !important;
+          }
+          
+          .section-title {
+            font-size: 2rem !important;
+          }
+          
+          .contact-title {
+            font-size: 2rem !important;
+          }
+        }
+
+        @media (max-width: 1024px) {
+          .education-card {
+            width: 220px !important;
+          }
+        }
+
+        @media (max-width: 768px) {
+          .cards-row {
+            flex-direction: column !important;
+            align-items: center !important;
+            gap: 15px !important;
+          }
+          
+          .education-card {
+            width: 90% !important;
+            max-width: 350px !important;
           }
         }
       `}</style>

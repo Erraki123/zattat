@@ -839,16 +839,12 @@ const ListePresences = () => {
                           {session.nomProfesseur || 'Non spécifié'}
                         </div>
                       </td>
-                      <td style={styles.td}>
-                        <div>
-                          <div style={{ fontWeight: '500', color: '#111827' }}>
-                            {session.heure || 'Non spécifiée'}
-                          </div>
-                          <div style={{ fontSize: '12px', color: '#6b7280', textTransform: 'capitalize' }}>
-                            {session.periode || 'Non spécifiée'}
-                          </div>
-                        </div>
-                      </td>
+                    <td style={styles.td}>
+  <div style={{ fontWeight: '500', color: '#111827' }}>
+    {formatHoraire(session.heure, session.periode)}
+  </div>
+</td>
+
                       <td style={styles.td}>
                         <div style={styles.progressContainer}>
                           <div style={styles.progressBar}>
@@ -913,7 +909,7 @@ const ListePresences = () => {
                       </p>
                       <p style={{ fontSize: '12px', color: '#6b7280', margin: '2px 0 0 0', display: 'flex', alignItems: 'center', gap: '4px' }}>
                         <Clock size={12} />
-                        {session.heure || 'Non spécifiée'} - {session.periode || 'Non spécifiée'}
+{formatHoraire(session.heure, session.periode)}
                       </p>
                     </div>
                     <button
@@ -985,7 +981,7 @@ const ListePresences = () => {
                   </div>
                   <p style={{ fontSize: '14px', color: '#6b7280', margin: '2px 0 0 0', display: 'flex', alignItems: 'center', gap: '8px' }}>
                     <Clock size={16} />
-                    {sessionActive.heure || 'Non spécifiée'} - <span style={{ textTransform: 'capitalize' }}>{sessionActive.periode || 'Non spécifiée'}</span>
+{formatHoraire(sessionActive.heure, sessionActive.periode)}
                   </p>
                 </div>
                 <button

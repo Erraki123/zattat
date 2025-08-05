@@ -179,13 +179,12 @@ const AjouterPaiement = () => {
     }
   }, [form.typePaiement]);
 
-  // (Optionnel) Calcul automatique du montant pour l’année
-  // useEffect(() => {
-  //   if (form.typePaiement === 'annuel') {
-  //     const montantMensuel = form.montant / (form.nombreMois || 1);
-  //     setForm(prev => ({ ...prev, montant: montantMensuel * 12 }));
-  //   }
-  // }, [form.nombreMois]);
+   useEffect(() => {
+     if (form.typePaiement === 'annuel') {
+       const montantMensuel = form.montant / (form.nombreMois || 1);
+       setForm(prev => ({ ...prev, montant: montantMensuel * 12 }));
+     }
+   }, [form.nombreMois]);
 
   const styles = {
     container: {

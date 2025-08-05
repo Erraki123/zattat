@@ -14,7 +14,11 @@ import {
   Eye,
   ExternalLink,
   RotateCcw,
-  Settings
+  Settings,
+  BarChart3,
+  Sliders,
+  Users,
+  TrendingUp
 } from 'lucide-react';
 
 const NotificationCenter = ({ onNavigate }) => {
@@ -25,6 +29,11 @@ const NotificationCenter = ({ onNavigate }) => {
   const [stats, setStats] = useState(null);
   const [showMenu, setShowMenu] = useState(false);
   const [resetLoading, setResetLoading] = useState(false);
+  const [showSeuils, setShowSeuils] = useState(false);
+  const [showStats, setShowStats] = useState(false);
+  const [seuils, setSeuils] = useState({ normal: 10, urgent: 15, critique: 20 });
+  const [statsAbsences, setStatsAbsences] = useState(null);
+  const [seuilsLoading, setSeuilsLoading] = useState(false);
   const dropdownRef = useRef(null);
   
   // Configuration de l'API
@@ -43,6 +52,8 @@ const NotificationCenter = ({ onNavigate }) => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
         setIsOpen(false);
         setShowMenu(false);
+        setShowSeuils(false);
+        setShowStats(false);
       }
     };
 
@@ -62,6 +73,9 @@ const NotificationCenter = ({ onNavigate }) => {
         const data = await response.json();
         setNotifications(data.notifications || []);
         setUnreadCount(data.total || 0);
+        if (data.seuils) {
+          setSeuils(data.seuils);
+        }
       }
     } catch (error) {
       console.error('❌ Erreur chargement notifications:', error);
@@ -86,9 +100,24 @@ const NotificationCenter = ({ onNavigate }) => {
     }
   };
 
+  // Charger les statistiques d'absences détaillées
+  const loadStatsAbsences = async () => {
+    try {
+      const response = await fetch(`${API_BASE}/notifications/stats-absences`, {
+        headers: getAuthHeaders()
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        setStatsAbsences(data);
+      }
+    } catch (error) {
+      console.error('❌ Erreur chargement stats absences:', error);
+    }
+  };
+
   // Supprimer une notification
   const deleteNotification = async (notificationId, event) => {
-    // Empêcher la propagation du clic vers le parent
     event.stopPropagation();
     
     try {
@@ -98,9 +127,14 @@ const NotificationCenter = ({ onNavigate }) => {
       });
       
       if (response.ok) {
-        // Supprimer la notification de l'état local
+        const data = await response.json();
         setNotifications(prev => prev.filter(n => n.id !== notificationId));
         setUnreadCount(prev => Math.max(0, prev - 1));
+        
+        // Afficher un message informatif pour les notifications d'absence
+        if (data.context && data.context.etudiantId) {
+          console.log(`✅ Notification d'absence supprimée pour l'étudiant. Elle sera recréée si les absences augmentent.`);
+        }
       } else {
         console.error('❌ Erreur lors de la suppression');
       }
@@ -122,14 +156,8 @@ const NotificationCenter = ({ onNavigate }) => {
         const data = await response.json();
         console.log('✅ Notifications supprimées réinitialisées:', data);
         
-        // Recharger les notifications pour voir celles qui ont été restaurées
         await loadNotifications();
-        
-        // Fermer le menu
         setShowMenu(false);
-        
-        // Optionnel: Afficher une notification de succès
-        // Vous pouvez implémenter un système de toast ici
         alert(`${data.restoredCount} notifications ont été restaurées !`);
         
       } else {
@@ -144,6 +172,36 @@ const NotificationCenter = ({ onNavigate }) => {
     }
   };
 
+  // Mettre à jour les seuils d'absence
+  const updateSeuils = async (nouveauxSeuils) => {
+    try {
+      setSeuilsLoading(true);
+      const response = await fetch(`${API_BASE}/notifications/seuils-absence`, {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify(nouveauxSeuils)
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        setSeuils(data.seuils);
+        setShowSeuils(false);
+        alert('Seuils mis à jour avec succès !');
+        
+        // Recharger les notifications avec les nouveaux seuils
+        await loadNotifications();
+      } else {
+        const error = await response.json();
+        alert(`Erreur: ${error.error}`);
+      }
+    } catch (error) {
+      console.error('❌ Erreur mise à jour seuils:', error);
+      alert('Erreur lors de la mise à jour des seuils');
+    } finally {
+      setSeuilsLoading(false);
+    }
+  };
+
   // Charger au montage du composant
   useEffect(() => {
     loadNotifications();
@@ -155,13 +213,13 @@ const NotificationCenter = ({ onNavigate }) => {
     const interval = setInterval(() => {
       loadNotifications();
       loadStats();
-    }, 2 * 60 * 1000); // 2 minutes
+    }, 2 * 60 * 1000);
 
     return () => clearInterval(interval);
   }, []);
 
   // Obtenir l'icône selon le type de notification
-  const getNotificationIcon = (type, priority) => {
+  const getNotificationIcon = (type, priority, data) => {
     const iconProps = { size: 18 };
     
     switch (type) {
@@ -169,6 +227,12 @@ const NotificationCenter = ({ onNavigate }) => {
       case 'payment_expiring':
         return <CreditCard {...iconProps} style={{ color: '#ef4444' }} />;
       case 'absence_frequent':
+        // Icône différente selon le niveau de criticité
+        if (data && data.seuil === 'critique') {
+          return <AlertTriangle {...iconProps} style={{ color: '#dc2626' }} />;
+        } else if (data && data.seuil === 'urgent') {
+          return <UserX {...iconProps} style={{ color: '#ea580c' }} />;
+        }
         return <UserX {...iconProps} style={{ color: '#f97316' }} />;
       case 'event_upcoming':
         return <Calendar {...iconProps} style={{ color: '#3b82f6' }} />;
@@ -177,8 +241,18 @@ const NotificationCenter = ({ onNavigate }) => {
     }
   };
 
-  // Obtenir la couleur selon la priorité
-  const getPriorityStyles = (priority) => {
+  // Obtenir la couleur selon la priorité et le type
+  const getPriorityStyles = (priority, type, data) => {
+    // Styles spéciaux pour les notifications d'absence critique
+    if (type === 'absence_frequent' && data && data.seuil === 'critique') {
+      return {
+        borderLeft: '4px solid #dc2626',
+        backgroundColor: '#fef2f2',
+        borderColor: '#fecaca',
+        boxShadow: '0 4px 12px rgba(220, 38, 38, 0.15)'
+      };
+    }
+    
     switch (priority) {
       case 'urgent':
         return {
@@ -207,6 +281,21 @@ const NotificationCenter = ({ onNavigate }) => {
     }
   };
 
+  // Formater le message pour les absences avec plus de détails
+  const formatAbsenceMessage = (notification) => {
+    if (notification.type !== 'absence_frequent' || !notification.data) {
+      return notification.message;
+    }
+
+    const { nombreAbsences, seuil, absencesParCours } = notification.data;
+    const coursDetails = absencesParCours ? 
+      Object.entries(absencesParCours)
+        .map(([cours, nb]) => `${cours}: ${nb}`)
+        .join(', ') : '';
+
+    return `${notification.message}${coursDetails ? ` (${coursDetails})` : ''}`;
+  };
+
   // Formater le temps relatif
   const formatTimeAgo = (timestamp) => {
     const now = new Date();
@@ -224,7 +313,6 @@ const NotificationCenter = ({ onNavigate }) => {
 
   // Gérer le clic sur une notification
   const handleNotificationClick = (notification) => {
-    // Navigation selon le type de notification
     switch (notification.type) {
       case 'payment_expired':
       case 'payment_expiring':
@@ -248,6 +336,287 @@ const NotificationCenter = ({ onNavigate }) => {
     loadStats();
   };
 
+  // Composant pour configurer les seuils
+  const SeuilsConfig = () => {
+    const [tempSeuils, setTempSeuils] = useState(seuils);
+
+    const handleSave = () => {
+      if (tempSeuils.normal >= tempSeuils.urgent || tempSeuils.urgent >= tempSeuils.critique) {
+        alert('Les seuils doivent être: normal < urgent < critique');
+        return;
+      }
+      updateSeuils(tempSeuils);
+    };
+
+    return (
+      <div style={{
+        position: 'absolute',
+        top: '100%',
+        right: '0',
+        marginTop: '4px',
+        backgroundColor: 'white',
+        borderRadius: '12px',
+        boxShadow: '0 10px 25px rgba(0, 0, 0, 0.15)',
+        border: '1px solid #e5e7eb',
+        minWidth: '320px',
+        zIndex: 60,
+        padding: '20px'
+      }}>
+        <h4 style={{ margin: '0 0 16px 0', fontSize: '16px', fontWeight: '600' }}>
+          Configuration des seuils d'absence
+        </h4>
+        
+        <div style={{ marginBottom: '16px' }}>
+          <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '4px' }}>
+            Seuil Normal (notification jaune)
+          </label>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <input
+              type="number"
+              min="1"
+              value={tempSeuils.normal}
+              onChange={(e) => setTempSeuils(prev => ({ ...prev, normal: parseInt(e.target.value) || 1 }))}
+              style={{
+                flex: 1,
+                padding: '8px 12px',
+                border: '1px solid #d1d5db',
+                borderRadius: '6px',
+                fontSize: '14px'
+              }}
+            />
+            <span style={{ fontSize: '14px', color: '#6b7280' }}>séances</span>
+          </div>
+        </div>
+
+        <div style={{ marginBottom: '16px' }}>
+          <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '4px' }}>
+            Seuil Urgent (notification orange)
+          </label>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <input
+              type="number"
+              min="1"
+              value={tempSeuils.urgent}
+              onChange={(e) => setTempSeuils(prev => ({ ...prev, urgent: parseInt(e.target.value) || 1 }))}
+              style={{
+                flex: 1,
+                padding: '8px 12px',
+                border: '1px solid #d1d5db',
+                borderRadius: '6px',
+                fontSize: '14px'
+              }}
+            />
+            <span style={{ fontSize: '14px', color: '#6b7280' }}>séances</span>
+          </div>
+        </div>
+
+        <div style={{ marginBottom: '20px' }}>
+          <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '4px' }}>
+            Seuil Critique (notification rouge)
+          </label>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <input
+              type="number"
+              min="1"
+              value={tempSeuils.critique}
+              onChange={(e) => setTempSeuils(prev => ({ ...prev, critique: parseInt(e.target.value) || 1 }))}
+              style={{
+                flex: 1,
+                padding: '8px 12px',
+                border: '1px solid #d1d5db',
+                borderRadius: '6px',
+                fontSize: '14px'
+              }}
+            />
+            <span style={{ fontSize: '14px', color: '#6b7280' }}>séances</span>
+          </div>
+        </div>
+
+        <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+          <button
+            onClick={() => setShowSeuils(false)}
+            style={{
+              padding: '8px 16px',
+              backgroundColor: '#f3f4f6',
+              color: '#374151',
+              border: 'none',
+              borderRadius: '6px',
+              cursor: 'pointer',
+              fontSize: '14px'
+            }}
+          >
+            Annuler
+          </button>
+          <button
+            onClick={handleSave}
+            disabled={seuilsLoading}
+            style={{
+              padding: '8px 16px',
+              backgroundColor: '#3b82f6',
+              color: 'white',
+              border: 'none',
+              borderRadius: '6px',
+              cursor: seuilsLoading ? 'not-allowed' : 'pointer',
+              fontSize: '14px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px'
+            }}
+          >
+            {seuilsLoading && <Loader2 size={14} className="animate-spin" />}
+            Sauvegarder
+          </button>
+        </div>
+      </div>
+    );
+  };
+
+  // Composant pour afficher les statistiques détaillées
+  const StatsAbsences = () => {
+    useEffect(() => {
+      if (showStats && !statsAbsences) {
+        loadStatsAbsences();
+      }
+    }, [showStats]);
+
+    if (!statsAbsences) {
+      return (
+        <div style={{
+          position: 'absolute',
+          top: '100%',
+          right: '0',
+          marginTop: '4px',
+          backgroundColor: 'white',
+          borderRadius: '12px',
+          boxShadow: '0 10px 25px rgba(0, 0, 0, 0.15)',
+          border: '1px solid #e5e7eb',
+          minWidth: '400px',
+          zIndex: 60,
+          padding: '20px',
+          textAlign: 'center'
+        }}>
+          <Loader2 className="animate-spin" size={24} style={{ color: '#3b82f6' }} />
+          <p style={{ marginTop: '8px', fontSize: '14px', color: '#6b7280' }}>
+            Chargement des statistiques...
+          </p>
+        </div>
+      );
+    }
+
+    return (
+      <div style={{
+        position: 'absolute',
+        top: '100%',
+        right: '0',
+        marginTop: '4px',
+        backgroundColor: 'white',
+        borderRadius: '12px',
+        boxShadow: '0 10px 25px rgba(0, 0, 0, 0.15)',
+        border: '1px solid #e5e7eb',
+        minWidth: '450px',
+        maxHeight: '400px',
+        zIndex: 60,
+        overflow: 'hidden'
+      }}>
+        <div style={{ padding: '20px', borderBottom: '1px solid #e5e7eb' }}>
+          <h4 style={{ margin: '0 0 16px 0', fontSize: '16px', fontWeight: '600' }}>
+            📊 Statistiques des absences
+          </h4>
+          
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px', marginBottom: '16px' }}>
+            <div style={{ textAlign: 'center', padding: '12px', backgroundColor: '#fef3c7', borderRadius: '8px' }}>
+              <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#d97706' }}>
+                {statsAbsences.parSeuil.normal}
+              </div>
+              <div style={{ fontSize: '12px', color: '#92400e' }}>Normal ({seuils.normal}+)</div>
+            </div>
+            <div style={{ textAlign: 'center', padding: '12px', backgroundColor: '#fed7aa', borderRadius: '8px' }}>
+              <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#ea580c' }}>
+                {statsAbsences.parSeuil.urgent}
+              </div>
+              <div style={{ fontSize: '12px', color: '#9a3412' }}>Urgent ({seuils.urgent}+)</div>
+            </div>
+            <div style={{ textAlign: 'center', padding: '12px', backgroundColor: '#fecaca', borderRadius: '8px' }}>
+              <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#dc2626' }}>
+                {statsAbsences.parSeuil.critique}
+              </div>
+              <div style={{ fontSize: '12px', color: '#991b1b' }}>Critique ({seuils.critique}+)</div>
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '14px', color: '#6b7280' }}>
+            <span>Total étudiants: {statsAbsences.totalEtudiants}</span>
+            <span>Moyenne: {statsAbsences.moyenneAbsences} absences</span>
+          </div>
+        </div>
+
+        <div style={{ maxHeight: '250px', overflowY: 'auto', padding: '12px' }}>
+          <h5 style={{ margin: '0 0 12px 0', fontSize: '14px', fontWeight: '600', padding: '0 8px' }}>
+            Top 10 des absences
+          </h5>
+          {statsAbsences.repartition.slice(0, 10).map((etudiant, index) => (
+            <div
+              key={etudiant.etudiantId}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                padding: '8px',
+                margin: '4px 0',
+                borderRadius: '6px',
+                backgroundColor: etudiant.niveau === 'critique' ? '#fef2f2' :
+                                etudiant.niveau === 'urgent' ? '#fff7ed' :
+                                etudiant.niveau === 'normal' ? '#fefce8' : '#f9fafb',
+                border: `1px solid ${
+                  etudiant.niveau === 'critique' ? '#fecaca' :
+                  etudiant.niveau === 'urgent' ? '#fed7aa' :
+                  etudiant.niveau === 'normal' ? '#fde047' : '#e5e7eb'
+                }`
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span style={{
+                  fontSize: '12px',
+                  fontWeight: 'bold',
+                  color: '#6b7280',
+                  minWidth: '20px'
+                }}>
+                  #{index + 1}
+                </span>
+                <span style={{ fontSize: '13px', fontWeight: '500' }}>
+                  {etudiant.nom}
+                </span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span style={{
+                  fontSize: '13px',
+                  fontWeight: 'bold',
+                  color: etudiant.niveau === 'critique' ? '#dc2626' :
+                         etudiant.niveau === 'urgent' ? '#ea580c' :
+                         etudiant.niveau === 'normal' ? '#d97706' : '#6b7280'
+                }}>
+                  {etudiant.absences}
+                </span>
+                <span style={{
+                  fontSize: '10px',
+                  padding: '2px 6px',
+                  borderRadius: '12px',
+                  backgroundColor: etudiant.niveau === 'critique' ? '#dc2626' :
+                                  etudiant.niveau === 'urgent' ? '#ea580c' :
+                                  etudiant.niveau === 'normal' ? '#d97706' : '#6b7280',
+                  color: 'white',
+                  fontWeight: '600'
+                }}>
+                  {etudiant.niveau.toUpperCase()}
+                </span>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  };
+
   const styles = {
     container: {
       position: 'relative'
@@ -266,12 +635,6 @@ const NotificationCenter = ({ onNavigate }) => {
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center'
-    },
-    
-    notificationButtonHover: {
-      color: '#1f2937',
-      backgroundColor: '#f3f4f6',
-      transform: 'scale(1.05)'
     },
     
     badge: {
@@ -373,7 +736,7 @@ const NotificationCenter = ({ onNavigate }) => {
       borderRadius: '8px',
       boxShadow: '0 10px 25px rgba(0, 0, 0, 0.15)',
       border: '1px solid #e5e7eb',
-      minWidth: '200px',
+      minWidth: '250px',
       zIndex: 60,
       animation: 'slideDown 0.15s ease'
     },
@@ -406,7 +769,7 @@ const NotificationCenter = ({ onNavigate }) => {
     
     statsGrid: {
       display: 'grid',
-      gridTemplateColumns: '1fr 1fr',
+      gridTemplateColumns: '1fr 1fr 1fr',
       gap: '12px',
       textAlign: 'center'
     },
@@ -419,13 +782,13 @@ const NotificationCenter = ({ onNavigate }) => {
     },
     
     statValue: {
-      fontSize: '20px',
+      fontSize: '18px',
       fontWeight: 'bold',
       marginBottom: '4px'
     },
     
     statLabel: {
-      fontSize: '12px',
+      fontSize: '11px',
       opacity: 0.9
     },
     
@@ -581,8 +944,13 @@ const NotificationCenter = ({ onNavigate }) => {
     }
   };
 
-  const getPriorityBadgeStyle = (priority) => {
+  const getPriorityBadgeStyle = (priority, type, data) => {
     const baseStyle = { ...styles.priorityBadge };
+    
+    // Style spécial pour les notifications d'absence critique
+    if (type === 'absence_frequent' && data && data.seuil === 'critique') {
+      return { ...baseStyle, backgroundColor: '#fef2f2', color: '#991b1b', fontWeight: 'bold' };
+    }
     
     switch (priority) {
       case 'urgent':
@@ -725,6 +1093,34 @@ const NotificationCenter = ({ onNavigate }) => {
                   {showMenu && (
                     <div style={styles.settingsMenu}>
                       <button
+                        onClick={() => {
+                          setShowSeuils(true);
+                          setShowStats(false);
+                          setShowMenu(false);
+                        }}
+                        style={styles.menuItem}
+                        className="menu-item"
+                      >
+                        <Sliders size={16} />
+                        <span>Configurer les seuils d'absence</span>
+                      </button>
+                      
+                      <button
+                        onClick={() => {
+                          setShowStats(true);
+                          setShowSeuils(false);
+                          setShowMenu(false);
+                        }}
+                        style={styles.menuItem}
+                        className="menu-item"
+                      >
+                        <BarChart3 size={16} />
+                        <span>Statistiques des absences</span>
+                      </button>
+                      
+                      <div style={{ height: '1px', backgroundColor: '#e5e7eb', margin: '8px 0' }} />
+                      
+                      <button
                         onClick={resetDeletedNotifications}
                         disabled={resetLoading}
                         style={{
@@ -742,6 +1138,10 @@ const NotificationCenter = ({ onNavigate }) => {
                       </button>
                     </div>
                   )}
+                  
+                  {/* Panels de configuration */}
+                  {showSeuils && <SeuilsConfig />}
+                  {showStats && <StatsAbsences />}
                 </div>
                 
                 <button
@@ -765,7 +1165,10 @@ const NotificationCenter = ({ onNavigate }) => {
                   </div>
                   <div style={styles.statCard}>
                     <div style={styles.statValue}>{stats.paiementsExpires}</div>
-                    <div style={styles.statLabel}>Paiements expirés</div>
+                    <div style={styles.statLabel}>Paiements expirés</div></div>
+                  <div style={styles.statCard}>
+                    <div style={styles.statValue}>{stats.absencesSignalees}</div>
+                    <div style={styles.statLabel}>Absences signalées</div>
                   </div>
                 </div>
               </div>
@@ -775,14 +1178,16 @@ const NotificationCenter = ({ onNavigate }) => {
             <div style={styles.notificationsList}>
               {loading ? (
                 <div style={styles.loadingContainer}>
-                  <Loader2 className="animate-spin" size={24} style={{ color: '#3b82f6' }} />
-                  <span style={{ marginLeft: '8px' }}>Chargement...</span>
+                  <Loader2 size={24} className="animate-spin" style={{ color: '#3b82f6' }} />
+                  <span style={{ marginLeft: '12px' }}>Chargement...</span>
                 </div>
               ) : notifications.length === 0 ? (
                 <div style={styles.emptyState}>
-                  <CheckCircle size={48} style={{ color: '#10b981', marginBottom: '12px' }} />
-                  <p style={styles.emptyStateTitle}>Aucune notification</p>
-                  <p style={styles.emptyStateText}>Tout va bien ! 🎉</p>
+                  <CheckCircle size={48} style={{ color: '#10b981', marginBottom: '16px' }} />
+                  <h4 style={styles.emptyStateTitle}>Tout est en ordre !</h4>
+                  <p style={styles.emptyStateText}>
+                    Aucune notification pour le moment
+                  </p>
                 </div>
               ) : (
                 notifications.map((notification) => (
@@ -791,17 +1196,17 @@ const NotificationCenter = ({ onNavigate }) => {
                     onClick={() => handleNotificationClick(notification)}
                     style={{
                       ...styles.notificationItem,
-                      ...getPriorityStyles(notification.priority)
+                      ...getPriorityStyles(notification.priority, notification.type, notification.data)
                     }}
                     className="notification-item"
                   >
                     <div style={styles.notificationContent}>
                       {/* Icône */}
                       <div style={styles.iconContainer}>
-                        {getNotificationIcon(notification.type, notification.priority)}
+                        {getNotificationIcon(notification.type, notification.priority, notification.data)}
                       </div>
                       
-                      {/* Contenu */}
+                      {/* Contenu principal */}
                       <div style={styles.contentBody}>
                         <div style={styles.contentHeader}>
                           <h4 style={styles.notificationTitle}>
@@ -813,7 +1218,6 @@ const NotificationCenter = ({ onNavigate }) => {
                               {formatTimeAgo(notification.timestamp)}
                             </span>
                             
-                            {/* Bouton de suppression */}
                             <button
                               onClick={(e) => deleteNotification(notification.id, e)}
                               style={styles.deleteButton}
@@ -825,21 +1229,57 @@ const NotificationCenter = ({ onNavigate }) => {
                           </div>
                         </div>
                         
+                        {/* Message */}
                         <p style={styles.notificationMessage}>
-                          {notification.message}
+                          {formatAbsenceMessage(notification)}
                         </p>
                         
-                        {/* Footer avec badge de priorité */}
+                        {/* Footer avec badge priorité */}
                         <div style={styles.footer}>
-                          <span style={getPriorityBadgeStyle(notification.priority)}>
-                            {notification.priority === 'urgent' && '🔥'}
-                            {notification.priority === 'high' && '⚠️'}
-                            {notification.priority === 'medium' && '💡'}
-                            {notification.priority === 'low' && 'ℹ️'}
-                            {notification.priority.charAt(0).toUpperCase() + notification.priority.slice(1)}
+                          <span 
+                            style={getPriorityBadgeStyle(notification.priority, notification.type, notification.data)}
+                          >
+                            {notification.type === 'absence_frequent' && notification.data?.seuil === 'critique' ? (
+                              <>
+                                <AlertTriangle size={12} />
+                                CRITIQUE
+                              </>
+                            ) : notification.priority === 'urgent' ? (
+                              <>
+                                <AlertCircle size={12} />
+                                URGENT
+                              </>
+                            ) : notification.priority === 'high' ? (
+                              <>
+                                <AlertTriangle size={12} />
+                                IMPORTANT
+                              </>
+                            ) : notification.priority === 'medium' ? (
+                              <>
+                                <Info size={12} />
+                                NORMAL
+                              </>
+                            ) : (
+                              <>
+                                <Info size={12} />
+                                INFO
+                              </>
+                            )}
                           </span>
                           
-                          <ExternalLink size={14} style={{ color: '#9ca3af' }} />
+                          {/* Détails supplémentaires pour les absences */}
+                          {notification.type === 'absence_frequent' && notification.data && (
+                            <div style={{ 
+                              fontSize: '12px', 
+                              color: '#6b7280',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '4px'
+                            }}>
+                              <Users size={12} />
+                              {notification.data.seuil?.toUpperCase()}
+                            </div>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -848,14 +1288,25 @@ const NotificationCenter = ({ onNavigate }) => {
               )}
             </div>
 
-            {/* Footer */}
+            {/* Footer avec bouton d'actualisation */}
             <div style={styles.dropdownFooter}>
               <button
                 onClick={handleRefresh}
+                disabled={loading}
                 style={styles.refreshButton}
                 className="refresh-button"
               >
-                Actualiser les notifications
+                {loading ? (
+                  <>
+                    <Loader2 size={14} className="animate-spin" style={{ marginRight: '6px' }} />
+                    Actualisation...
+                  </>
+                ) : (
+                  <>
+                    <Clock size={14} style={{ marginRight: '6px' }} />
+                    Actualiser les notifications
+                  </>
+                )}
               </button>
             </div>
           </div>

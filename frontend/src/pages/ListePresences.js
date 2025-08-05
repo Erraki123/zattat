@@ -41,7 +41,7 @@ const [dateTo, setDateTo] = useState('');
         // Groupement par date + cours + matiere + nomProfesseur
         const grouped = {};
         for (let p of data) {
-          const key = `${new Date(p.dateSession).toDateString()}_${p.cours}_${p.matiere || ''}_${p.nomProfesseur || ''}`;
+const key = `${new Date(p.dateSession).toDateString()}_${p.cours}_${p.matiere || ''}_${p.nomProfesseur || ''}_${p.heure || ''}`;
           if (!grouped[key]) grouped[key] = [];
           grouped[key].push(p);
         }
@@ -196,6 +196,12 @@ if (dateTo) {
   setMoisScolaireFilter('');
   setDateFrom('');
   setDateTo('');
+};
+const formatHoraire = (heure, periode) => {
+  if (!heure && !periode) return 'Non spécifié';
+  if (!heure) return periode ? periode.charAt(0).toUpperCase() + periode.slice(1) : 'Non spécifié';
+  if (!periode) return heure;
+  return `${heure} (${periode.charAt(0).toUpperCase() + periode.slice(1)})`;
 };
 
 const getMoisOptions = () => {
@@ -883,14 +889,10 @@ const getMoisOptions = () => {
                       <td style={styles.td}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                           <Clock size={14} color="#6b7280" />
-                          <span style={{ color: '#6b7280', textTransform: 'capitalize' }}>
-                            {session.presences[0]?.periode || '—'}
-                          </span>
-                          {session.presences[0]?.heure && (
-                            <span style={{ fontSize: '12px', color: '#9ca3af' }}>
-                              ({session.presences[0].heure})
-                            </span>
-                          )}
+                  <span style={{ color: '#6b7280', textTransform: 'capitalize' }}>
+  {formatHoraire(session.presences[0]?.heure, session.presences[0]?.periode)}
+</span>
+
                         </div>
                       </td>
                       <td style={styles.td}>
@@ -996,6 +998,11 @@ const getMoisOptions = () => {
                     <Book size={16} />
                     {sessionActive.cours}
                   </p>
+                  <p style={{ fontSize: '13px', color: '#6b7280', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+  <Clock size={14} />
+  {formatHoraire(sessionActive.presences[0]?.heure, sessionActive.presences[0]?.periode)}
+</p>
+
                 </div>
                 <button
                   className="close-button"

@@ -13,7 +13,8 @@ import {
   CheckCircle, 
   AlertCircle,
   Loader2,
-  GraduationCap
+  GraduationCap,
+  ArrowLeft
 } from 'lucide-react';
 
 const Login = () => {
@@ -72,12 +73,14 @@ const handleLogin = async () => {
   }
 };
 
-
-
   const handleKeyPress = (e) => {
     if (e.key === 'Enter') {
       handleLogin();
     }
+  };
+
+  const handleBackToHome = () => {
+    window.location.href = '/';
   };
 
   const messageType = message.split('|')[0];
@@ -107,7 +110,6 @@ const handleLogin = async () => {
   position: relative;
   overflow: hidden;
 }
-
 
         .background-pattern {
           position: absolute;
@@ -148,10 +150,9 @@ const handleLogin = async () => {
   }
 }
 
-
         .left-panel {
           flex: 1;
-          background: linear-gradient(135deg, #1e40af 0%, #3b82f6 50%, #6366f1 100%);
+          background: linear-gradient(to right, #e60039, #8a2be2);
           padding: 60px 40px;
           color: white;
           display: flex;
@@ -170,18 +171,26 @@ const handleLogin = async () => {
           position: relative;
           z-index: 1;
           margin-bottom: 50px;
+          text-align: center;
         }
 
-        .brand-icon {
-          width: 80px;
-          height: 80px;
-          background: rgba(255, 255, 255, 0.2);
+        .brand-logo {
+          width: 120px;
+          height: 120px;
+          margin: 0 auto 24px;
+          background: rgba(255, 255, 255, 0.1);
           border-radius: 20px;
+          backdrop-filter: blur(10px);
           display: flex;
           align-items: center;
           justify-content: center;
-          margin-bottom: 24px;
-          backdrop-filter: blur(10px);
+          overflow: hidden;
+        }
+
+        .brand-logo img {
+          width: 80px;
+          height: 80px;
+          object-fit: contain;
         }
 
         .brand-title {
@@ -191,38 +200,29 @@ const handleLogin = async () => {
           letter-spacing: -0.02em;
         }
 
-        .brand-subtitle {
-          font-size: 18px;
-          opacity: 0.9;
-          font-weight: 500;
-        }
-
-        .features-section {
-          position: relative;
-          z-index: 1;
-        }
-
-        .feature-item {
+        .back-button {
+          position: absolute;
+          top: 30px;
+          left: 30px;
+          background: rgba(255, 255, 255, 0.2);
+          border: none;
+          color: white;
+          padding: 12px;
+          border-radius: 12px;
+          cursor: pointer;
+          backdrop-filter: blur(10px);
+          transition: all 0.3s ease;
           display: flex;
           align-items: center;
-          margin-bottom: 24px;
-          padding: 16px;
-          background: rgba(255, 255, 255, 0.1);
-          border-radius: 12px;
-          backdrop-filter: blur(10px);
-        }
-
-        .feature-icon {
-          margin-right: 16px;
-          padding: 8px;
-          background: rgba(255, 255, 255, 0.2);
-          border-radius: 8px;
-          flex-shrink: 0;
-        }
-
-        .feature-text {
-          font-size: 16px;
+          gap: 8px;
+          font-size: 14px;
           font-weight: 500;
+          z-index: 10;
+        }
+
+        .back-button:hover {
+          background: rgba(255, 255, 255, 0.3);
+          transform: translateY(-2px);
         }
 
         .right-panel {
@@ -241,7 +241,7 @@ const handleLogin = async () => {
         .login-icon {
           width: 72px;
           height: 72px;
-          background: linear-gradient(135deg, #3b82f6 0%, #6366f1 100%);
+          background: linear-gradient(to right, #e60039, #8a2be2);
           border-radius: 18px;
           display: flex;
           align-items: center;
@@ -291,9 +291,9 @@ const handleLogin = async () => {
         }
 
         .input:focus {
-          border-color: #3b82f6;
+          border-color: #e60039;
           background: #ffffff;
-          box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.1);
+          box-shadow: 0 0 0 4px rgba(230, 0, 57, 0.1);
           transform: translateY(-1px);
         }
 
@@ -307,7 +307,7 @@ const handleLogin = async () => {
         }
 
         .input:focus + .input-icon {
-          color: #3b82f6;
+          color: #e60039;
         }
 
         .password-toggle {
@@ -325,14 +325,14 @@ const handleLogin = async () => {
         }
 
         .password-toggle:hover {
-          color: #3b82f6;
+          color: #e60039;
           background: #f3f4f6;
         }
 
         .login-button {
           width: 100%;
           padding: 16px;
-          background: linear-gradient(135deg, #3b82f6 0%, #6366f1 100%);
+          background: linear-gradient(to right, #e60039, #8a2be2);
           color: white;
           border: none;
           border-radius: 12px;
@@ -349,7 +349,7 @@ const handleLogin = async () => {
 
         .login-button:hover:not(:disabled) {
           transform: translateY(-2px);
-          box-shadow: 0 8px 25px rgba(59, 130, 246, 0.4);
+          box-shadow: 0 8px 25px rgba(230, 0, 57, 0.4);
         }
 
         .login-button:disabled {
@@ -407,8 +407,11 @@ const handleLogin = async () => {
           .brand-title {
             font-size: 28px;
           }
-          .brand-subtitle {
-            font-size: 16px;
+          .back-button {
+            top: 20px;
+            left: 20px;
+            padding: 10px;
+            font-size: 12px;
           }
         }
 
@@ -432,33 +435,23 @@ const handleLogin = async () => {
           .brand-section {
             margin-bottom: 30px;
           }
-          .brand-icon {
+          .brand-logo {
+            width: 80px;
+            height: 80px;
+            margin: 0 auto 16px;
+          }
+          .brand-logo img {
             width: 60px;
             height: 60px;
-            margin: 0 auto 16px;
           }
           .brand-title {
             font-size: 24px;
             margin-bottom: 8px;
           }
-          .brand-subtitle {
-            font-size: 14px;
-          }
-          .features-section {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 12px;
-          }
-          .feature-item {
-            padding: 12px;
-            margin-bottom: 0;
-            flex-direction: column;
-            text-align: center;
-          }
-          .feature-icon {
-            margin: 0 0 8px 0;
-          }
-          .feature-text {
+          .back-button {
+            top: 15px;
+            left: 15px;
+            padding: 8px;
             font-size: 12px;
           }
           .right-panel {
@@ -503,20 +496,11 @@ const handleLogin = async () => {
           .brand-title {
             font-size: 20px;
           }
-          .brand-subtitle {
-            font-size: 12px;
-          }
-          .features-section {
-            grid-template-columns: 1fr;
-          }
-          .feature-item {
-            flex-direction: row;
-          }
-          .feature-icon {
-            margin: 0 12px 0 0;
-          }
-          .feature-text {
-            font-size: 13px;
+          .back-button {
+            top: 10px;
+            left: 10px;
+            padding: 6px;
+            font-size: 11px;
           }
           .login-title {
             font-size: 18px;
@@ -538,9 +522,13 @@ const handleLogin = async () => {
         }
 
         @media (max-width: 360px) {
-          .brand-icon {
-            width: 50px;
-            height: 50px;
+          .brand-logo {
+            width: 60px;
+            height: 60px;
+          }
+          .brand-logo img {
+            width: 45px;
+            height: 45px;
           }
           .login-icon {
             width: 48px;
@@ -559,20 +547,6 @@ const handleLogin = async () => {
           .brand-section {
             margin-bottom: 20px;
           }
-          .features-section {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 8px;
-          }
-          .feature-item {
-            flex: 1 1 calc(50% - 4px);
-            min-width: 140px;
-            margin-bottom: 8px;
-            padding: 8px;
-          }
-          .feature-text {
-            font-size: 12px;
-          }
         }
       `}</style>
       
@@ -584,52 +558,16 @@ const handleLogin = async () => {
           <div className="left-panel">
             <div className="left-panel-overlay"></div>
             
+            <button onClick={handleBackToHome} className="back-button">
+              <ArrowLeft size={16} />
+              Retour
+            </button>
+            
             <div className="brand-section">
-              <div className="brand-icon">
-                <GraduationCap size={40} />
+              <div className="brand-logo">
+                <img src="/logo-ak.png" alt="Alfred Kastler Logo" />
               </div>
-              <h1 className="brand-title"> Alfred Kastler</h1>
-              <p className="brand-subtitle">
-                Système de Gestion des Élèves & Paiements
-              </p>
-            </div>
-
-            <div className="features-section">
-              <div className="feature-item">
-                <div className="feature-icon">
-                  <Users size={20} />
-                </div>
-                <div>
-                  <div className="feature-text">Gestion des Élèves</div>
-                </div>
-              </div>
-
-              <div className="feature-item">
-                <div className="feature-icon">
-                  <CreditCard size={20} />
-                </div>
-                <div>
-                  <div className="feature-text">Suivi des Paiements</div>
-                </div>
-              </div>
-
-              <div className="feature-item">
-                <div className="feature-icon">
-                  <BarChart3 size={20} />
-                </div>
-                <div>
-                  <div className="feature-text">Rapports & Analytics</div>
-                </div>
-              </div>
-
-              <div className="feature-item">
-                <div className="feature-icon">
-                  <Shield size={20} />
-                </div>
-                <div>
-                  <div className="feature-text">Sécurité Avancée</div>
-                </div>
-              </div>
+              <h1 className="brand-title">Alfred Kastler</h1>
             </div>
           </div>
 

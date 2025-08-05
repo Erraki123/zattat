@@ -11,15 +11,19 @@ import {
   Clock,
   DollarSign,
   Users,
-  FileText
+  FileText,
+  Filter,
+  Eye,
+  EyeOff
 } from 'lucide-react';
 import axios from 'axios';
-import { useParams } from 'react-router-dom'; // Ajout de l'import manquant
-import Sidebar from '../components/Sidebar'; // ✅ استيراد صحيح
-  const handleLogout = () => {
-    localStorage.removeItem('token');
-    window.location.href = '/';
-  };
+import { useParams } from 'react-router-dom';
+import Sidebar from '../components/Sidebar';
+
+const handleLogout = () => {
+  localStorage.removeItem('token');
+  window.location.href = '/';
+};
 
 const ProfilEtudiant = () => {
   const { id } = useParams();
@@ -29,11 +33,14 @@ const ProfilEtudiant = () => {
   const [expirés, setExpirés] = useState([]);
   const [presences, setPresences] = useState([]);
   const [loading, setLoading] = useState(true);
+  
+  // ✅ Nouveaux états pour les filtres de présence
+  const [presenceFilter, setPresenceFilter] = useState('all'); // 'all', 'present', 'absent'
+  const [showPresenceStats, setShowPresenceStats] = useState(true);
 
   useEffect(() => {
     const fetchData = async () => {
       try {
-       
         const token = localStorage.getItem('token');
         const config = { headers: { Authorization: `Bearer ${token}` } };
 
@@ -58,12 +65,34 @@ const ProfilEtudiant = () => {
         console.error('Erreur lors du chargement des données:', error);
         setLoading(false);
       } finally {
-        setLoading(false); // ✅ Arrête le chargement dans tous les cas
+        setLoading(false);
       }
     };
 
     fetchData();
   }, [id]);
+
+  // ✅ Fonction pour calculer les statistiques de présence
+  const getPresenceStats = () => {
+    const total = presences.length;
+    const present = presences.filter(p => p.present).length;
+    const absent = total - present;
+    const tauxPresence = total > 0 ? ((present / total) * 100).toFixed(1) : 0;
+    
+    return { total, present, absent, tauxPresence };
+  };
+
+  // ✅ Fonction pour filtrer les présences
+  const getFilteredPresences = () => {
+    switch (presenceFilter) {
+      case 'present':
+        return presences.filter(p => p.present);
+      case 'absent':
+        return presences.filter(p => !p.present);
+      default:
+        return presences;
+    }
+  };
 
   if (loading) {
     return (
@@ -86,9 +115,12 @@ const ProfilEtudiant = () => {
     );
   }
 
+  const filteredPresences = getFilteredPresences();
+  const stats = getPresenceStats();
+
   return (
     <div style={styles.pageContainer}>
-            <Sidebar onLogout={handleLogout} />
+      <Sidebar onLogout={handleLogout} />
 
       {/* Header avec informations principales */}
       <div style={styles.headerSection}>
@@ -205,8 +237,7 @@ const ProfilEtudiant = () => {
                             <span style={styles.amountText}>{p.montant} DH</span>
                           </td>
                           <td style={styles.td}>
-{p.createdAt ? new Date(p.createdAt).toLocaleDateString('fr-FR') : '—'}
-
+                            {p.createdAt ? new Date(p.createdAt).toLocaleDateString('fr-FR') : '—'}
                           </td>
                           <td style={styles.td}>{p.note || '—'}</td>
                         </tr>
@@ -282,24 +313,115 @@ const ProfilEtudiant = () => {
             </div>
           </div>
 
-          {/* Section Présences */}
+          {/* ✅ Section Présences - UPDATED */}
           <div style={styles.section}>
             <div style={styles.sectionHeader}>
               <div style={styles.sectionTitle}>
                 <Users size={24} color="#8b5cf6" />
                 <h2>Historique de présence</h2>
               </div>
-              <div style={{...styles.counter, backgroundColor: '#f3f4f6', color: '#6b7280'}}>
-                <span>{presences.length}</span>
+              <div style={styles.presenceHeaderControls}>
+                {/* ✅ Bouton pour afficher/masquer les stats */}
+                <button
+                  onClick={() => setShowPresenceStats(!showPresenceStats)}
+                  style={styles.toggleStatsBtn}
+                >
+                  {showPresenceStats ? <EyeOff size={16} /> : <Eye size={16} />}
+                  {showPresenceStats ? 'Masquer stats' : 'Voir stats'}
+                </button>
+                
+                {/* ✅ Filtre de présence */}
+                <div style={styles.filterContainer}>
+                  <Filter size={16} color="#6b7280" />
+                  <select
+                    value={presenceFilter}
+                    onChange={(e) => setPresenceFilter(e.target.value)}
+                    style={styles.filterSelect}
+                  >
+                    <option value="all">Tout afficher ({presences.length})</option>
+                    <option value="present">Présent ({stats.present})</option>
+                    <option value="absent">Absent ({stats.absent})</option>
+                  </select>
+                </div>
               </div>
             </div>
 
+            {/* ✅ Statistiques de présence */}
+            {showPresenceStats && presences.length > 0 && (
+              <div style={styles.presenceStatsContainer}>
+                <div style={styles.statCard}>
+                  <div style={styles.statIcon}>
+                    <CheckCircle size={20} color="#22c55e" />
+                  </div>
+                  <div style={styles.statContent}>
+                    <span style={styles.statLabel}>Présences</span>
+                    <span style={styles.statValue}>{stats.present}</span>
+                  </div>
+                </div>
+                
+                <div style={styles.statCard}>
+                  <div style={styles.statIcon}>
+                    <XCircle size={20} color="#ef4444" />
+                  </div>
+                  <div style={styles.statContent}>
+                    <span style={styles.statLabel}>Absences</span>
+                    <span style={styles.statValue}>{stats.absent}</span>
+                  </div>
+                </div>
+                
+                <div style={styles.statCard}>
+                  <div style={styles.statIcon}>
+                    <Users size={20} color="#8b5cf6" />
+                  </div>
+                  <div style={styles.statContent}>
+                    <span style={styles.statLabel}>Total sessions</span>
+                    <span style={styles.statValue}>{stats.total}</span>
+                  </div>
+                </div>
+                
+                <div style={styles.statCard}>
+                  <div style={styles.statIcon}>
+                    <div style={{
+                      width: '20px',
+                      height: '20px',
+                      borderRadius: '50%',
+                      background: `conic-gradient(#22c55e 0% ${stats.tauxPresence}%, #e5e7eb ${stats.tauxPresence}% 100%)`,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontSize: '10px',
+                      fontWeight: 'bold',
+                      color: '#374151'
+                    }}>
+                      %
+                    </div>
+                  </div>
+                  <div style={styles.statContent}>
+                    <span style={styles.statLabel}>Taux présence</span>
+                    <span style={styles.statValue}>{stats.tauxPresence}%</span>
+                  </div>
+                </div>
+              </div>
+            )}
+
             <div style={styles.sectionContent}>
-              {presences.length === 0 ? (
+              {filteredPresences.length === 0 ? (
                 <div style={styles.emptyState}>
                   <Users size={48} color="#94a3b8" />
-                  <h3>Aucun enregistrement de présence</h3>
-                  <p>L'historique de présence de cet étudiant apparaîtra ici.</p>
+                  <h3>
+                    {presenceFilter === 'all' 
+                      ? 'Aucun enregistrement de présence'
+                      : presenceFilter === 'present'
+                      ? 'Aucune présence trouvée'
+                      : 'Aucune absence trouvée'
+                    }
+                  </h3>
+                  <p>
+                    {presenceFilter === 'all'
+                      ? "L'historique de présence de cet étudiant apparaîtra ici."
+                      : `Aucun enregistrement de type "${presenceFilter}" pour cet étudiant.`
+                    }
+                  </p>
                 </div>
               ) : (
                 <div style={styles.tableWrapper}>
@@ -309,13 +431,13 @@ const ProfilEtudiant = () => {
                         <th style={styles.th}>Date</th>
                         <th style={styles.th}>Cours</th>
                         <th style={styles.th}>Matière</th>
-                        <th style={styles.th}>Période</th>
+                        <th style={styles.th}>Période & Heure</th>
                         <th style={styles.th}>Statut</th>
                         <th style={styles.th}>Remarque</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {presences.map(p => (
+                      {filteredPresences.map(p => (
                         <tr key={p._id} style={styles.tableRow}>
                           <td style={styles.td}>
                             {new Date(p.dateSession).toLocaleDateString('fr-FR')}
@@ -327,17 +449,14 @@ const ProfilEtudiant = () => {
                             <span>{p.matiere || '—'}</span>
                           </td>
                           <td style={styles.td}>
-                            <span style={{ 
-                              backgroundColor: '#fefce8', 
-                              color: '#92400e', 
-                              padding: '4px 8px', 
-                              borderRadius: '6px',
-                              fontSize: '12px',
-                              fontWeight: '500',
-                              border: '1px solid #fde68a'
-                            }}>
-                              {p.periode === 'matin' ? 'Matin' : p.periode === 'soir' ? 'Soir' : '—'}
-                            </span>
+                            <div style={styles.periodeHeureContainer}>
+                              <span style={styles.periodeBadge}>
+                                {p.periode === 'matin' ? 'Matin' : p.periode === 'soir' ? 'Soir' : '—'}
+                              </span>
+                              <span style={styles.heureBadge}>
+                                {p.heure || '—'}
+                              </span>
+                            </div>
                           </td>
                           <td style={styles.td}>
                             <div style={styles.presenceStatus}>
@@ -541,11 +660,8 @@ const styles = {
   },
 
   mainContent: {
-          background: 'linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 25%, #f3e8ff 100%)'
+    background: 'linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 25%, #f3e8ff 100%)'
   },
-
-
-
 
   contentWrapper: {
     maxWidth: '1200px',
@@ -593,6 +709,91 @@ const styles = {
     fontSize: '14px',
     fontWeight: '600',
     padding: '0 8px'
+  },
+
+  // ✅ Nouveaux styles pour les contrôles de présence
+  presenceHeaderControls: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '16px'
+  },
+
+  toggleStatsBtn: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+    padding: '8px 12px',
+    backgroundColor: '#f3f4f6',
+    border: '1px solid #d1d5db',
+    borderRadius: '6px',
+    fontSize: '12px',
+    fontWeight: '500',
+    color: '#374151',
+    cursor: 'pointer',
+    transition: 'all 0.2s ease'
+  },
+
+  filterContainer: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px'
+  },
+
+  filterSelect: {
+    padding: '6px 12px',
+    border: '1px solid #d1d5db',
+    borderRadius: '6px',
+    fontSize: '12px',
+    fontWeight: '500',
+    color: '#374151',
+    backgroundColor: '#ffffff',
+    cursor: 'pointer'
+  },
+
+  // ✅ Styles pour les statistiques
+  presenceStatsContainer: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
+    gap: '16px',
+    padding: '20px 32px',
+    backgroundColor: '#f8fafc',
+    borderBottom: '1px solid #e5e7eb'
+  },
+
+  statCard: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '12px',
+    padding: '16px',
+    backgroundColor: '#ffffff',
+    borderRadius: '8px',
+    border: '1px solid #e5e7eb',
+    boxShadow: '0 1px 2px rgba(0, 0, 0, 0.05)'
+  },
+
+  statIcon: {
+    flexShrink: 0
+  },
+
+  statContent: {
+    display: 'flex',
+    flexDirection: 'column',
+    minWidth: 0
+  },
+
+  statLabel: {
+    fontSize: '11px',
+    fontWeight: '500',
+    color: '#6b7280',
+    textTransform: 'uppercase',
+    letterSpacing: '0.5px',
+    marginBottom: '2px'
+  },
+
+  statValue: {
+    fontSize: '18px',
+    fontWeight: '700',
+    color: '#111827'
   },
 
   sectionContent: {
@@ -682,6 +883,35 @@ const styles = {
     border: '1px solid #fecaca'
   },
 
+  // ✅ Styles pour période + heure combinés
+  periodeHeureContainer: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '4px'
+  },
+
+  periodeBadge: {
+    display: 'inline-block',
+    padding: '4px 8px',
+    backgroundColor: '#fefce8',
+    color: '#92400e',
+    borderRadius: '6px',
+    fontSize: '12px',
+    fontWeight: '500',
+    border: '1px solid #fde68a'
+  },
+
+  heureBadge: {
+    display: 'inline-block',
+    padding: '4px 8px',
+    backgroundColor: '#eef2ff',
+    color: '#4338ca',
+    borderRadius: '6px',
+    fontSize: '12px',
+    fontWeight: '500',
+    border: '1px solid #c7d2fe'
+  },
+
   presenceStatus: {
     display: 'flex',
     alignItems: 'center',
@@ -707,6 +937,20 @@ styleSheet.textContent = `
   @keyframes spin {
     0% { transform: rotate(0deg); }
     100% { transform: rotate(360deg); }
+  }
+  
+  .toggleStatsBtn:hover {
+    background-color: #e5e7eb !important;
+    transform: translateY(-1px);
+  }
+  
+  .filterSelect:focus {
+    outline: 2px solid #3b82f6;
+    outline-offset: 2px;
+  }
+  
+  .tableRow:hover {
+    background-color: #f9fafb !important;
   }
 `;
 document.head.appendChild(styleSheet);

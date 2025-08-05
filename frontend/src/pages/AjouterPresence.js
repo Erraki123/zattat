@@ -23,7 +23,8 @@ const AjouterPresence = () => {
   const [etudiants, setEtudiants] = useState([]);
   const [selectedCours, setSelectedCours] = useState('');
   const [dateSession, setDateSession] = useState('');
-  const [heure, setHeure] = useState('');
+  const [heureDebut, setHeureDebut] = useState('');
+  const [heureFin, setHeureFin] = useState('');
   const [periode, setPeriode] = useState('matin');
   const [presences, setPresences] = useState([]);
   const [message, setMessage] = useState('');
@@ -72,6 +73,188 @@ const AjouterPresence = () => {
     }
   }, []);
 
+  // Ajouter les styles CSS
+  useEffect(() => {
+    const additionalStyles = `
+      .form-select:focus, .form-input:focus {
+        border-color: #3b82f6 !important;
+        box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1) !important;
+      }
+      
+      .table-row:hover {
+        background-color: #f8fafc !important;
+      }
+      
+      .remarque-input:focus {
+        border-color: #3b82f6 !important;
+        box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1) !important;
+      }
+      
+      /* Responsive Design */
+      @media (max-width: 968px) {
+        .configuration-grid {
+          grid-template-columns: 1fr !important;
+          gap: 16px !important;
+        }
+        
+        .left-column, .right-column {
+          padding: 20px !important;
+        }
+      }
+      
+      @media (max-width: 768px) {
+        .main-content {
+          padding: 16px !important;
+        }
+        
+        .form-content {
+          padding: 20px !important;
+        }
+        
+        .configuration-grid {
+          grid-template-columns: 1fr !important;
+          gap: 16px !important;
+          margin-bottom: 16px !important;
+        }
+        
+        .left-column {
+          background: linear-gradient(135deg, #f8fafc, #f1f5f9) !important;
+          margin-bottom: 0 !important;
+        }
+        
+        .right-column {
+          background: linear-gradient(135deg, #fefcbf, #fef3c7) !important;
+        }
+        
+        .title {
+          font-size: 24px !important;
+        }
+        
+        .table-container {
+          font-size: 14px !important;
+        }
+        
+        .th, .td {
+          padding: 12px 8px !important;
+        }
+        
+        .remarque-container {
+          flex-direction: column !important;
+          align-items: stretch !important;
+          gap: 6px !important;
+        }
+        
+        .submit-button {
+          width: 100% !important;
+          justify-content: center !important;
+        }
+        
+        .student-info {
+          flex-direction: column !important;
+          align-items: center !important;
+          text-align: center !important;
+          gap: 8px !important;
+        }
+        
+        .student-name {
+          font-size: 14px !important;
+        }
+        
+        .avatar {
+          width: 35px !important;
+          height: 35px !important;
+        }
+        
+        .avatar-text {
+          font-size: 14px !important;
+        }
+        
+        .status-select {
+          min-width: 100px !important;
+          font-size: 13px !important;
+          padding: 6px 12px !important;
+        }
+        
+        .form-group {
+          margin-bottom: 16px !important;
+        }
+        
+        .card-header {
+          padding: 20px 24px !important;
+        }
+        
+        .card-title-text {
+          font-size: 18px !important;
+        }
+      }
+      
+      @media (max-width: 480px) {
+        .main-content {
+          padding: 12px !important;
+        }
+        
+        .form-content {
+          padding: 16px !important;
+        }
+        
+        .left-column, .right-column {
+          padding: 16px !important;
+          gap: 16px !important;
+        }
+        
+        .header-content {
+          padding: 0 16px !important;
+        }
+        
+        .title {
+          font-size: 20px !important;
+        }
+        
+        .title-section {
+          flex-direction: column !important;
+          gap: 8px !important;
+          padding: 16px 0 !important;
+        }
+        
+        .card-header {
+          padding: 16px 20px !important;
+        }
+        
+        .table-container {
+          border-radius: 8px !important;
+        }
+        
+        .submit-container {
+          padding-top: 16px !important;
+        }
+        
+        .submit-button {
+          padding: 14px 24px !important;
+          font-size: 15px !important;
+        }
+      }
+    `;
+
+    const styleSheet = document.createElement("style");
+    styleSheet.innerText = additionalStyles;
+    document.head.appendChild(styleSheet);
+    
+    return () => {
+      // Cleanup
+      if (document.head.contains(styleSheet)) {
+        document.head.removeChild(styleSheet);
+      }
+    };
+  }, []);
+
+  // تحديث الفترة تلقائياً عند تغيير وقت البداية
+  useEffect(() => {
+    if (heureDebut) {
+      const hour = parseInt(heureDebut.split(':')[0]);
+      setPeriode(hour < 12 ? 'matin' : 'soir');
+    }
+  }, [heureDebut]);
+
   const handleLogout = () => {
     localStorage.removeItem('token');
     window.location.href = '/';
@@ -115,10 +298,19 @@ const AjouterPresence = () => {
     const token = localStorage.getItem('token');
 
     // Validation des champs requis
-    if (!selectedCours || !dateSession || !heure) {
+    if (!selectedCours || !dateSession || !heureDebut || !heureFin) {
       setMessage('error');
       return;
     }
+
+    // Validation que l'heure de fin est après l'heure de début
+    if (heureFin <= heureDebut) {
+      setMessage('error');
+      return;
+    }
+
+    // Création du format d'heure pour l'envoi
+    const heure = `${heureDebut}-${heureFin}`;
 
     try {
       for (const pres of presences) {
@@ -141,6 +333,29 @@ const AjouterPresence = () => {
     }
   };
 
+  // Fonction pour convertir l'heure en format 12h avec AM/PM
+  const formatTimeToAMPM = (time24) => {
+    if (!time24) return '';
+    const [hours, minutes] = time24.split(':');
+    const hour12 = parseInt(hours) % 12 || 12;
+    const ampm = parseInt(hours) >= 12 ? 'PM' : 'AM';
+    return `${hour12}:${minutes} ${ampm}`;
+  };
+
+  // Fonction pour obtenir le texte de la période
+  const getPeriodeText = () => {
+    if (!heureDebut) return '';
+    const hour = parseInt(heureDebut.split(':')[0]);
+    return hour < 12 ? 'Matin' : 'Soir';
+  };
+
+  // Fonction pour obtenir l'icône selon la période
+  const getPeriodeIcon = () => {
+    if (!heureDebut) return <Clock style={styles.labelIcon} />;
+    const hour = parseInt(heureDebut.split(':')[0]);
+    return hour < 12 ? <Sun style={styles.labelIcon} /> : <Moon style={styles.labelIcon} />;
+  };
+
   return (
     <div style={styles.container}>
       {/* Header moderne */}
@@ -150,7 +365,6 @@ const AjouterPresence = () => {
         <div style={styles.headerContent}>
           <div style={styles.titleSection}>
             <div style={styles.iconContainer}>
-              <GraduationCap style={styles.titleIcon} />
             </div>
             <h1 style={styles.title}>Enregistrement de Présence</h1>
           </div>
@@ -191,6 +405,7 @@ const AjouterPresence = () => {
                     value={selectedCours} 
                     onChange={handleCoursChange} 
                     required
+                    className="form-select"
                   >
                     <option value="">Choisir un cours...</option>
                     {cours.map(c => (
@@ -211,6 +426,7 @@ const AjouterPresence = () => {
                     value={dateSession} 
                     onChange={e => setDateSession(e.target.value)} 
                     required 
+                    className="form-input"
                   />
                 </div>
               </div>
@@ -223,40 +439,81 @@ const AjouterPresence = () => {
                   <h3 style={styles.columnTitle}>Horaire de session</h3>
                 </div>
                 
-                {/* Heure de la session */}
+                {/* Heure de début */}
                 <div style={styles.formGroup}>
                   <label style={styles.label}>
                     <Clock style={styles.labelIcon} />
-                    Heure de la session
+                    Heure de début
                   </label>
-                  <input 
-                    type="time" 
+                  <input
+                    type="time"
+                    value={heureDebut}
+                    onChange={(e) => setHeureDebut(e.target.value)}
                     style={styles.input}
-                    value={heure} 
-                    onChange={e => setHeure(e.target.value)} 
-                    required 
+                    required
+                    className="form-input"
                   />
+                  {/* Affichage automatique AM/PM */}
+                  {heureDebut && (
+                    <div style={styles.timeDisplay}>
+                      <span style={styles.timeDisplayText}>
+                        {formatTimeToAMPM(heureDebut)}
+                      </span>
+                    </div>
+                  )}
                 </div>
 
-                {/* Période de la session */}
+                {/* Heure de fin */}
                 <div style={styles.formGroup}>
                   <label style={styles.label}>
                     <Clock style={styles.labelIcon} />
-                    Période
+                    Heure de fin
                   </label>
-                  <select 
-                    style={styles.select} 
-                    value={periode} 
-                    onChange={e => setPeriode(e.target.value)} 
+                  <input
+                    type="time"
+                    value={heureFin}
+                    onChange={(e) => setHeureFin(e.target.value)}
+                    style={styles.input}
                     required
-                  >
-                    <option value="matin">
-                      <Sun style={{ display: 'inline', width: '16px', height: '16px' }} /> Matin
-                    </option>
-                    <option value="soir">
-                      <Moon style={{ display: 'inline', width: '16px', height: '16px' }} /> Soir
-                    </option>
-                  </select>
+                    className="form-input"
+                  />
+                  {/* Affichage automatique AM/PM */}
+                  {heureFin && (
+                    <div style={styles.timeDisplay}>
+                      <span style={styles.timeDisplayText}>
+                        {formatTimeToAMPM(heureFin)}
+                      </span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Période (automatique) */}
+                <div style={styles.formGroup}>
+                  <label style={styles.label}>
+                    {getPeriodeIcon()}
+                    Période (automatique)
+                  </label>
+                  <div style={styles.periodeDisplay}>
+                    {heureDebut ? (
+                      <div style={{
+                        ...styles.periodeTag,
+                        backgroundColor: periode === 'matin' ? '#dbeafe' : '#fef3c7',
+                        color: periode === 'matin' ? '#1e40af' : '#d97706',
+                        borderColor: periode === 'matin' ? '#93c5fd' : '#fcd34d'
+                      }}>
+                        {periode === 'matin' ? 
+                          <Sun style={styles.periodeIcon} /> : 
+                          <Moon style={styles.periodeIcon} />
+                        }
+                        {getPeriodeText()}
+                      </div>
+                    ) : (
+                      <div style={{...styles.periodeTag, backgroundColor: '#f3f4f6', color: '#6b7280', borderColor: '#d1d5db'}}>
+                        <Clock style={styles.periodeIcon} />
+                        Sélectionnez une heure
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>
@@ -282,7 +539,7 @@ const AjouterPresence = () => {
                     </thead>
                     <tbody>
                       {presences.map((p, i) => (
-                        <tr key={p.etudiant} style={styles.tableRow}>
+                        <tr key={p.etudiant} style={styles.tableRow} className="table-row">
                           <td style={styles.td}>
                             <div style={styles.studentInfo}>
                               <div style={styles.avatar}>
@@ -305,12 +562,10 @@ const AjouterPresence = () => {
                               onChange={(e) => handlePresenceChange(i, 'present', e.target.value === 'true')}
                             >
                               <option value="true">
-                                <UserCheck style={{ display: 'inline', width: '14px', height: '14px', marginRight: '4px' }} />
-                                Présent
+                                ✓ Présent
                               </option>
                               <option value="false">
-                                <UserX style={{ display: 'inline', width: '14px', height: '14px', marginRight: '4px' }} />
-                                Absent
+                                ✗ Absent
                               </option>
                             </select>
                           </td>
@@ -323,6 +578,7 @@ const AjouterPresence = () => {
                                 value={p.remarque} 
                                 onChange={(e) => handlePresenceChange(i, 'remarque', e.target.value)}
                                 placeholder="Ajouter une remarque..."
+                                className="remarque-input"
                               />
                             </div>
                           </td>
@@ -338,6 +594,7 @@ const AjouterPresence = () => {
                     type="submit" 
                     style={styles.submitButton}
                     onClick={handleSubmit}
+                    className="submit-button"
                     onMouseEnter={(e) => {
                       e.target.style.background = 'linear-gradient(135deg, #1e40af, #3730a3)';
                       e.target.style.transform = 'translateY(-2px)';
@@ -372,7 +629,7 @@ const AjouterPresence = () => {
                 ) : (
                   <>
                     <XCircle style={styles.messageIcon} />
-                    Échec lors de l'enregistrement. Veuillez vérifier tous les champs requis.
+                    Erreur: Veuillez vérifier tous les champs requis et que l'heure de fin soit après l'heure de début.
                   </>
                 )}
               </div>
@@ -411,21 +668,8 @@ const styles = {
     gap: '12px',
     padding: '24px 0'
   },
-  iconContainer: {
-    width: '48px',
-    height: '48px',
-    borderRadius: '12px',
-    background: 'linear-gradient(135deg, #3b82f6, #4f46e5)',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    boxShadow: '0 4px 15px rgba(59, 130, 246, 0.3)'
-  },
-  titleIcon: {
-    width: '32px',
-    height: '32px',
-    color: '#ffffff'
-  },
+ 
+ 
   title: {
     fontSize: '32px',
     fontWeight: '700',
@@ -474,11 +718,7 @@ const styles = {
     display: 'grid',
     gridTemplateColumns: '1fr 1fr',
     gap: '32px',
-    marginBottom: '24px',
-    '@media (max-width: 768px)': {
-      gridTemplateColumns: '1fr',
-      gap: '0'
-    }
+    marginBottom: '24px'
   },
   leftColumn: {
     display: 'flex',
@@ -496,8 +736,7 @@ const styles = {
     flexDirection: 'column',
     gap: '24px',
     padding: '24px',
-    background: 'linear-gradient(135deg, #fefcbf, #fef3c7)',
-    borderRadius: '16px',
+ background: 'linear-gradient(135deg, #f8fafc, #f1f5f9)',    borderRadius: '16px',
     border: '1px solid rgba(217, 119, 6, 0.2)',
     boxShadow: '0 2px 8px rgba(0, 0, 0, 0.04)',
     position: 'relative'
@@ -563,6 +802,38 @@ const styles = {
     transition: 'all 0.2s ease',
     boxSizing: 'border-box',
     boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)'
+  },
+  timeDisplay: {
+    marginTop: '8px',
+    padding: '8px 12px',
+    background: 'rgba(59, 130, 246, 0.1)',
+    borderRadius: '6px',
+    border: '1px solid rgba(59, 130, 246, 0.2)'
+  },
+  timeDisplayText: {
+    fontSize: '14px',
+    fontWeight: '500',
+    color: '#1e40af'
+  },
+  periodeDisplay: {
+    display: 'flex',
+    alignItems: 'center'
+  },
+  periodeTag: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+    padding: '12px 16px',
+    backgroundColor: '#dbeafe',
+    color: '#1e40af',
+    borderRadius: '8px',
+    border: '2px solid #93c5fd',
+    fontSize: '16px',
+    fontWeight: '500'
+  },
+  periodeIcon: {
+    width: '18px',
+    height: '18px'
   },
   presenceSection: {
     marginTop: '32px',
@@ -717,171 +988,4 @@ const styles = {
     height: '20px'
   }
 };
-
-// CSS pour les effets hover et focus
-const additionalStyles = `
-  .form-select:focus, .form-input:focus {
-    border-color: #3b82f6 !important;
-    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1) !important;
-  }
-  
-  .table-row:hover {
-    background-color: #f8fafc !important;
-  }
-  
-  .remarque-input:focus {
-    border-color: #3b82f6 !important;
-    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1) !important;
-  }
-  
-  /* Responsive Design */
-  @media (max-width: 968px) {
-    .configuration-grid {
-      grid-template-columns: 1fr !important;
-      gap: 16px !important;
-    }
-    
-    .left-column, .right-column {
-      padding: 20px !important;
-    }
-  }
-  
-  @media (max-width: 768px) {
-    .main-content {
-      padding: 16px !important;
-    }
-    
-    .form-content {
-      padding: 20px !important;
-    }
-    
-    .configuration-grid {
-      grid-template-columns: 1fr !important;
-      gap: 16px !important;
-      margin-bottom: 16px !important;
-    }
-    
-    .left-column {
-      background: linear-gradient(135deg, #f8fafc, #f1f5f9) !important;
-      margin-bottom: 0 !important;
-    }
-    
-    .right-column {
-      background: linear-gradient(135deg, #fefcbf, #fef3c7) !important;
-    }
-    
-    .title {
-      font-size: 24px !important;
-    }
-    
-    .table-container {
-      font-size: 14px !important;
-    }
-    
-    .th, .td {
-      padding: 12px 8px !important;
-    }
-    
-    .remarque-container {
-      flex-direction: column !important;
-      align-items: stretch !important;
-      gap: 6px !important;
-    }
-    
-    .submit-button {
-      width: 100% !important;
-      justify-content: center !important;
-    }
-    
-    .student-info {
-      flex-direction: column !important;
-      align-items: center !important;
-      text-align: center !important;
-      gap: 8px !important;
-    }
-    
-    .student-name {
-      font-size: 14px !important;
-    }
-    
-    .avatar {
-      width: 35px !important;
-      height: 35px !important;
-    }
-    
-    .avatar-text {
-      font-size: 14px !important;
-    }
-    
-    .status-select {
-      min-width: 100px !important;
-      font-size: 13px !important;
-      padding: 6px 12px !important;
-    }
-    
-    .form-group {
-      margin-bottom: 16px !important;
-    }
-    
-    .card-header {
-      padding: 20px 24px !important;
-    }
-    
-    .card-title-text {
-      font-size: 18px !important;
-    }
-  }
-  
-  @media (max-width: 480px) {
-    .main-content {
-      padding: 12px !important;
-    }
-    
-    .form-content {
-      padding: 16px !important;
-    }
-    
-    .left-column, .right-column {
-      padding: 16px !important;
-      gap: 16px !important;
-    }
-    
-    .header-content {
-      padding: 0 16px !important;
-    }
-    
-    .title {
-      font-size: 20px !important;
-    }
-    
-    .title-section {
-      flex-direction: column !important;
-      gap: 8px !important;
-      padding: 16px 0 !important;
-    }
-    
-    .card-header {
-      padding: 16px 20px !important;
-    }
-    
-    .table-container {
-      border-radius: 8px !important;
-    }
-    
-    .submit-container {
-      padding-top: 16px !important;
-    }
-    
-    .submit-button {
-      padding: 14px 24px !important;
-      font-size: 15px !important;
-    }
-  }
-`;
-
-// Ajouter les styles CSS avec des classes
-const styleSheet = document.createElement("style");
-styleSheet.innerText = additionalStyles;
-document.head.appendChild(styleSheet);
-
 export default AjouterPresence;

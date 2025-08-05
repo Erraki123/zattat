@@ -393,18 +393,33 @@ const EtudiantPresencesAbsences = () => {
                       </div>
                     </div>
                   )}
-                  {/* période */}
-                  {item.periode && (
-                    <div style={styles.remarqueInfo}>
-                      <Clock size={18} color="#6b7280" />
-                      <div style={styles.remarqueDetails}>
-                        <span style={styles.remarqueLabel}>Période</span>
-                        <span style={styles.remarqueValue}>
-                          {item.periode === 'matin' ? 'Matin' : item.periode === 'soir' ? 'Soir' : item.periode}
-                        </span>
-                      </div>
-                    </div>
-                  )}
+    {(item.periode || item.heure) && (
+  <div style={styles.remarqueInfo}>
+    <Clock size={18} color="#6b7280" />
+    <div style={styles.remarqueDetails}>
+      {item.periode && (
+        <>
+          <span style={styles.remarqueLabel}>Période</span>
+          <span style={styles.remarqueValue}>
+            {item.periode === 'matin'
+              ? 'Matin'
+              : item.periode === 'soir'
+              ? 'Soir'
+              : item.periode}
+          </span>
+        </>
+      )}
+      {item.heure && (
+        <>
+          <span style={styles.remarqueLabel}>Heure</span>
+          <span style={styles.remarqueValue}>{item.heure}</span>
+        </>
+      )}
+    </div>
+  </div>
+)}
+
+
                 </div>
               </div>
             ))}

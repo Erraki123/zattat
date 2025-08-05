@@ -5,9 +5,7 @@ import {
   Mail, Phone, CreditCard, FileText, Clock, Info, CheckCircle, XCircle, MapPin, Settings
 } from 'lucide-react';
 
-
- 
-// 🆕 3. FONCTION DEBOUNCE (déplacer AVANT le composant)
+// Fonction debounce
 function useDebounce(value, delay) {
   const [debouncedValue, setDebouncedValue] = useState(value);
   useEffect(() => {
@@ -25,24 +23,22 @@ const PaiementsExp = () => {
   const [expirés, setExpirés] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [filtered, setFiltered] = useState([]);
-  const [sortBy, setSortBy] = useState('date');
+  const [sortBy, setSortBy] = useState('urgency');
   const [filterBy, setFilterBy] = useState('all');
   const [showFilters, setShowFilters] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [viewMode, setViewMode] = useState('cards'); // 'cards' ou 'table'
+  const [viewMode, setViewMode] = useState('cards');
   const [showModal, setShowModal] = useState(false);
   const [selectedPaiement, setSelectedPaiement] = useState(null);
 
-  // 🆕 1. AJOUTS D'ÉTATS
+  // États pour filtres avancés
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
   const [urgencyFilter, setUrgencyFilter] = useState('all');
   const [courseFilter, setCourseFilter] = useState('all');
   const [dateRangeFilter, setDateRangeFilter] = useState('all');
   const [searchHistory, setSearchHistory] = useState([]);
-  const [amountRange, setAmountRange] = useState({ min: '', max: '' });
 
-  // ✅ يجب أن يكون هنا
   const debouncedSearchTerm = useDebounce(searchTerm, 300);
 
   useEffect(() => {
@@ -52,48 +48,20 @@ const PaiementsExp = () => {
   useEffect(() => {
     let results = [...expirés];
     
-    // 🔍 RECHERCHE AMÉLIORÉE
+    // 🔍 RECHERCHE ADAPTÉE AU NOUVEAU FORMAT
     if (debouncedSearchTerm) {
       const term = normalizeString(debouncedSearchTerm);
       results = results.filter(p => {
         const nomComplet = normalizeString(p.etudiant?.nomComplet || '');
         const cours = normalizeString(p.cours || '');
-        const note = normalizeString(p.note || '');
-        const telephone = normalizeString(p.etudiant?.telephone || '');
-        const montant = p.montant?.toString() || '';
-        return nomComplet.includes(term) ||
-          cours.includes(term) ||
-          note.includes(term) ||
-          telephone.includes(term) ||
-          montant.includes(term);
+        return nomComplet.includes(term) || cours.includes(term);
       });
     }
 
-    // 🎯 FILTRE PAR MONTANT AMÉLIORÉ
-    if (filterBy !== 'all') {
-      if (filterBy === 'low') {
-        results = results.filter(p => p.montant < 1500);
-      } else if (filterBy === 'medium') {
-        results = results.filter(p => p.montant >= 1500 && p.montant <= 2500);
-      } else if (filterBy === 'high') {
-        results = results.filter(p => p.montant > 2500);
-      }
-    }
-
-    // 🆕 FILTRE PAR PLAGE DE MONTANT PERSONNALISÉE
-    if (amountRange.min || amountRange.max) {
-      results = results.filter(p => {
-        const montant = p.montant || 0;
-        const min = amountRange.min ? parseFloat(amountRange.min) : 0;
-        const max = amountRange.max ? parseFloat(amountRange.max) : Infinity;
-        return montant >= min && montant <= max;
-      });
-    }
-
-    // 🆕 FILTRE PAR URGENCE
+    // 🆕 FILTRE PAR URGENCE (basé sur jours expirés)
     if (urgencyFilter !== 'all') {
       results = results.filter(p => {
-        const urgency = getUrgencyLevel(p.moisDebut, p.nombreMois);
+        const urgency = getUrgencyLevel(p.derniereFin);
         return urgency === urgencyFilter;
       });
     }
@@ -106,7 +74,7 @@ const PaiementsExp = () => {
     // 🆕 FILTRE PAR PÉRIODE D'EXPIRATION
     if (dateRangeFilter !== 'all') {
       results = results.filter(p => {
-        const joursExpirés = calculerJoursExpirés(p.moisDebut, p.nombreMois);
+        const joursExpirés = calculerJoursExpirés(p.derniereFin);
         switch (dateRangeFilter) {
           case 'week':
             return joursExpirés <= 7;
@@ -122,31 +90,32 @@ const PaiementsExp = () => {
       });
     }
 
-    // TRI (existant avec améliorations)
+    // TRI ADAPTÉ AU NOUVEAU FORMAT
     results.sort((a, b) => {
       switch (sortBy) {
         case 'name':
           return (a.etudiant?.nomComplet || '').localeCompare(b.etudiant?.nomComplet || '');
-        case 'amount':
-          return b.montant - a.montant;
         case 'course':
           return a.cours.localeCompare(b.cours);
         case 'expired':
-          const aExpired = calculerJoursExpirés(a.moisDebut, a.nombreMois);
-          const bExpired = calculerJoursExpirés(b.moisDebut, b.nombreMois);
+          const aExpired = calculerJoursExpirés(a.derniereFin);
+          const bExpired = calculerJoursExpirés(b.derniereFin);
           return bExpired - aExpired;
         case 'urgency':
           const urgencyOrder = { 'critique': 3, 'urgent': 2, 'recent': 1 };
-          const aUrgency = urgencyOrder[getUrgencyLevel(a.moisDebut, a.nombreMois)];
-          const bUrgency = urgencyOrder[getUrgencyLevel(b.moisDebut, b.nombreMois)];
+          const aUrgency = urgencyOrder[getUrgencyLevel(a.derniereFin)] || 0;
+          const bUrgency = urgencyOrder[getUrgencyLevel(b.derniereFin)] || 0;
           return bUrgency - aUrgency;
         default:
-          return new Date(b.moisDebut) - new Date(a.moisDebut);
+          // Tri par défaut : plus urgent (plus de jours expirés) en premier
+          const aJours = calculerJoursExpirés(a.derniereFin);
+          const bJours = calculerJoursExpirés(b.derniereFin);
+          return bJours - aJours;
       }
     });
 
     setFiltered(results);
-  }, [debouncedSearchTerm, expirés, sortBy, filterBy, urgencyFilter, courseFilter, dateRangeFilter, amountRange]);
+  }, [debouncedSearchTerm, expirés, sortBy, filterBy, urgencyFilter, courseFilter, dateRangeFilter]);
 
   const fetchExpirés = async () => {
     try {
@@ -184,29 +153,23 @@ const PaiementsExp = () => {
     }
   };
 
+  // 🆕 FONCTIONS ADAPTÉES AU NOUVEAU FORMAT
   const formatDate = (isoDate) => {
     if (!isoDate) return '—';
     return new Date(isoDate).toLocaleDateString('fr-FR');
   };
 
-  const calculerDateFin = (debut, mois) => {
-    if (!debut || !mois) return '—';
-    const d = new Date(debut);
-    d.setMonth(d.getMonth() + Number(mois));
-    return d.toLocaleDateString('fr-FR');
-  };
-
-  const calculerJoursExpirés = (debut, mois) => {
-    if (!debut || !mois) return 0;
-    const dateFin = new Date(debut);
-    dateFin.setMonth(dateFin.getMonth() + Number(mois));
+  // Calculer les jours expirés depuis derniereFin
+  const calculerJoursExpirés = (derniereFin) => {
+    if (!derniereFin) return 0;
     const maintenant = new Date();
+    const dateFin = new Date(derniereFin);
     const diffTime = maintenant - dateFin;
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
     return Math.max(0, diffDays);
   };
 
-  // 🆕 Fonction pour pré-remplir le paiement
+  // Fonction pour pré-remplir le paiement
   const payerEtudiant = (etudiantId, cours) => {
     localStorage.setItem('paiementPreRempli', JSON.stringify({
       etudiant: etudiantId,
@@ -214,17 +177,19 @@ const PaiementsExp = () => {
     }));
     window.location.href = '/ajouter-paiement';
   };
-const handleLogout = () => {
+
+  const handleLogout = () => {
     localStorage.removeItem('token');
     window.location.href = '/';
   };
-  // 🆕 Fonction pour voir les détails
+
+  // Fonction pour voir les détails
   const voirDetails = (paiement) => {
     setSelectedPaiement(paiement);
     setShowModal(true);
   };
 
-  // 🆕 2. FONCTION DE NORMALISATION
+  // Fonction de normalisation
   const normalizeString = (str) => {
     if (typeof str !== 'string') {
       if (str === null || str === undefined) return '';
@@ -237,22 +202,21 @@ const handleLogout = () => {
       .trim();
   };
 
- 
-  // 🆕 5. FONCTION POUR OBTENIR LES COURS UNIQUES
+  // Fonction pour obtenir les cours uniques
   const uniqueCourses = useMemo(() => {
     const courses = [...new Set(expirés.map(p => p.cours).filter(Boolean))];
     return courses.sort();
   }, [expirés]);
 
-  // 🆕 6. FONCTION POUR CALCULER L'URGENCE
-  const getUrgencyLevel = (debut, mois) => {
-    const joursExpirés = calculerJoursExpirés(debut, mois);
+  // Fonction pour calculer l'urgence basée sur derniereFin
+  const getUrgencyLevel = (derniereFin) => {
+    const joursExpirés = calculerJoursExpirés(derniereFin);
     if (joursExpirés > 30) return 'critique';
     if (joursExpirés >= 15) return 'urgent';
     return 'recent';
   };
 
-  // 🆕 8. FONCTION POUR SAUVEGARDER L'HISTORIQUE DE RECHERCHE
+  // Fonction pour sauvegarder l'historique de recherche
   const saveSearchHistory = useCallback((term) => {
     if (term.length > 2) {
       setSearchHistory(prev => {
@@ -263,7 +227,7 @@ const handleLogout = () => {
     }
   }, []);
 
-  // 🆕 9. FONCTION POUR CHARGER L'HISTORIQUE
+  // Charger l'historique
   useEffect(() => {
     const saved = sessionStorage.getItem('paiements_search_history');
     if (saved) {
@@ -271,18 +235,17 @@ const handleLogout = () => {
     }
   }, []);
 
-  // 🆕 10. FONCTION POUR RÉINITIALISER TOUS LES FILTRES
+  // Fonction pour réinitialiser tous les filtres
   const resetAllFilters = () => {
     setSearchTerm('');
     setFilterBy('all');
-    setSortBy('date');
+    setSortBy('urgency');
     setUrgencyFilter('all');
     setCourseFilter('all');
     setDateRangeFilter('all');
-    setAmountRange({ min: '', max: '' });
   };
 
-  // 🆕 11. FONCTION POUR COMPTER LES FILTRES ACTIFS
+  // Compter les filtres actifs
   const activeFiltersCount = useMemo(() => {
     let count = 0;
     if (searchTerm) count++;
@@ -290,11 +253,10 @@ const handleLogout = () => {
     if (urgencyFilter !== 'all') count++;
     if (courseFilter !== 'all') count++;
     if (dateRangeFilter !== 'all') count++;
-    if (amountRange.min || amountRange.max) count++;
     return count;
-  }, [searchTerm, filterBy, urgencyFilter, courseFilter, dateRangeFilter, amountRange]);
+  }, [searchTerm, filterBy, urgencyFilter, courseFilter, dateRangeFilter]);
 
-  // 🆕 12. RACCOURCI CLAVIER
+  // Raccourci clavier
   useEffect(() => {
     const handleKeyDown = (e) => {
       if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
@@ -309,8 +271,8 @@ const handleLogout = () => {
   const styles = {
     container: {
       minHeight: '100vh',
-          background: 'linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 25%, #f3e8ff 100%)',
-           padding: '24px'
+      background: 'linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 25%, #f3e8ff 100%)',
+      padding: '24px'
     },
     header: {
       background: 'white',
@@ -334,15 +296,14 @@ const handleLogout = () => {
       display: 'flex',
       gap: '16px',
       marginBottom: '24px',
-      flexWrap: 'wrap'
+      flexWrap: 'wrap',
+      justifyContent: 'center'
     },
     statCard: {
       background: 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)',
       color: 'white',
       padding: '16px 24px',
       borderRadius: '10px',
-        justifyContent: 'center',
-
       minWidth: '160px',
       textAlign: 'center'
     },
@@ -477,15 +438,6 @@ const handleLogout = () => {
       fontSize: '18px',
       fontWeight: '600',
       color: '#1e293b'
-    },
-    expiredBadge: {
-      background: '#fef2f2',
-      color: '#dc2626',
-      padding: '6px 12px',
-      borderRadius: '20px',
-      fontSize: '12px',
-      fontWeight: '600',
-      border: '1px solid #fecaca'
     },
     courseInfo: {
       display: 'flex',
@@ -674,16 +626,14 @@ const handleLogout = () => {
     );
   }
 
-  const totalMontant = filtered.reduce((sum, p) => sum + (p.montant || 0), 0);
-
-  // 🆕 13. NOUVEAU JSX POUR LA ZONE DE RECHERCHE AMÉLIORÉE
+  // Zone de recherche
   const searchContainerNew = (
     <div style={styles.searchContainer}>
       <div style={styles.searchInputWrapper}>
         <Search size={20} style={styles.searchIcon} />
         <input
           type="text"
-          placeholder="Rechercher par nom, cours, note, téléphone, montant... (Ctrl+F)"
+          placeholder="Rechercher par nom d'étudiant ou cours... (Ctrl+F)"
           value={searchTerm}
           onChange={(e) => {
             setSearchTerm(e.target.value);
@@ -765,7 +715,7 @@ const handleLogout = () => {
     </div>
   );
 
-  // 🆕 14. NOUVEAU PANNEAU DE FILTRES AVANCÉS
+  // Panneau de filtres avancés
   const advancedFiltersPanel = showAdvancedFilters && (
     <div style={styles.filtersPanel}>
       <div style={styles.filterGroup}>
@@ -808,78 +758,52 @@ const handleLogout = () => {
           <option value="old">Plus de 3 mois</option>
         </select>
       </div>
-      <div style={styles.filterGroup}>
-        <label style={styles.filterLabel}>Plage de montant :</label>
-        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-          <input
-            type="number"
-            placeholder="Min"
-            value={amountRange.min}
-            onChange={(e) => setAmountRange(prev => ({ ...prev, min: e.target.value }))}
-            style={{ ...styles.select, width: '80px' }}
-          />
-          <span>-</span>
-          <input
-            type="number"
-            placeholder="Max"
-            value={amountRange.max}
-            onChange={(e) => setAmountRange(prev => ({ ...prev, max: e.target.value }))}
-            style={{ ...styles.select, width: '80px' }}
-          />
-          <span style={{ fontSize: '12px', color: '#6b7280' }}>Dh</span>
-        </div>
-      </div>
     </div>
   );
 
   return (
     <div style={styles.container}>
-        <Sidebar onLogout={handleLogout} />
+      <Sidebar onLogout={handleLogout} />
       <div style={styles.header}>
         <h1 style={styles.title}>
           <AlertTriangle size={32} color="#ef4444" />
           Gestion des Paiements Expirés
         </h1>
         
+        {/* Statistiques */}
+        <div style={styles.statsRow}>
+          <div style={styles.statCard}>
+            <div style={styles.statNumber}>{filtered.length}</div>
+            <div style={styles.statLabel}>Paiements expirés</div>
+          </div>
+          <div style={styles.statCard}>
+            <div style={styles.statNumber}>
+              {filtered.filter(p => getUrgencyLevel(p.derniereFin) === 'critique').length}
+            </div>
+            <div style={styles.statLabel}>Critiques</div>
+          </div>
+        </div>
+
         <div>
-          {/* Remplacer la searchContainer par la nouvelle */}
           {searchContainerNew}
         </div>
 
         <div style={styles.filtersPanel}>
           <div style={styles.filterGroup}>
             <label style={styles.filterLabel}>Trier par :</label>
-            {/* 🆕 15. AMÉLIORER LE SELECT DE TRI */}
             <select
               value={sortBy}
               onChange={(e) => setSortBy(e.target.value)}
               style={styles.select}
             >
-              <option value="date">Date de début</option>
+              <option value="urgency">Niveau d'urgence</option>
               <option value="name">Nom étudiant</option>
               <option value="course">Cours</option>
-              <option value="amount">Montant</option>
               <option value="expired">Plus expiré</option>
-              <option value="urgency">Niveau d'urgence</option>
-            </select>
-          </div>
-          <div style={styles.filterGroup}>
-            <label style={styles.filterLabel}>Filtrer par montant :</label>
-            {/* 🆕 16. NOUVEAU SELECT POUR FILTRAGE PAR MONTANT */}
-            <select
-              value={filterBy}
-              onChange={(e) => setFilterBy(e.target.value)}
-              style={styles.select}
-            >
-              <option value="all">Tous les montants</option>
-              <option value="low">Moins de 1500 Dh</option>
-              <option value="medium">1500 - 2500 Dh</option>
-              <option value="high">Plus de 2500 Dh</option>
             </select>
           </div>
         </div>
 
-        {/* 🆕 14. NOUVEAU PANNEAU DE FILTRES AVANCÉS */}
         {advancedFiltersPanel}
       </div>
 
@@ -890,7 +814,7 @@ const handleLogout = () => {
             Aucun paiement expiré trouvé
           </h3>
           <p style={{ color: '#6b7280' }}>
-            {searchTerm || filterBy !== 'all' 
+            {searchTerm || activeFiltersCount > 0
               ? 'Essayez de modifier vos critères de recherche.' 
               : 'Excellente nouvelle ! Aucun paiement n\'est actuellement expiré.'
             }
@@ -898,15 +822,15 @@ const handleLogout = () => {
         </div>
       ) : viewMode === 'cards' ? (
         <div style={styles.grid}>
-          {filtered.map(p => {
-            const joursExpirés = calculerJoursExpirés(p.moisDebut, p.nombreMois);
+          {filtered.map((p, index) => {
+            const joursExpirés = calculerJoursExpirés(p.derniereFin);
             const initiales = p.etudiant?.nomComplet 
               ? p.etudiant.nomComplet.split(' ').map(n => n[0]).join('').toUpperCase()
               : '?';
             
             return (
               <div
-                key={p._id}
+                key={`${p.etudiant?._id}_${p.cours}_${index}`}
                 style={styles.card}
                 onMouseEnter={(e) => {
                   Object.assign(e.currentTarget.style, styles.cardHover);
@@ -939,9 +863,9 @@ const handleLogout = () => {
                       {p.etudiant?.nomComplet || 'Nom indisponible'}
                     </div>
                   </div>
-                  {/* Remplacer le badge d'urgence dans les cartes */}
+                  {/* Badge d'urgence */}
                   {(() => {
-                    const urgencyLevel = getUrgencyLevel(p.moisDebut, p.nombreMois);
+                    const urgencyLevel = getUrgencyLevel(p.derniereFin);
                     const urgencyColors = {
                       critique: { bg: '#fef2f2', color: '#dc2626', border: '#fecaca' },
                       urgent: { bg: '#fef3c7', color: '#d97706', border: '#fed7aa' },
@@ -978,53 +902,29 @@ const handleLogout = () => {
                 
                 <div style={styles.detailsGrid}>
                   <div style={styles.detailItem}>
-                    <div style={{...styles.detailIcon, background: '#ecfdf5'}}>
-                      <DollarSign size={16} color="#059669" />
-                    </div>
-                    <div style={styles.detailText}>
-                      <span>Montant : </span>
-                      <span style={{...styles.detailValue, color: '#059669'}}>
-                        {(p.montant || 0).toLocaleString()} Dh
-                      </span>
-                    </div>
-                  </div>
-                  <div style={styles.detailItem}>
-                    <div style={{...styles.detailIcon, background: '#eff6ff'}}>
-                      <Calendar size={16} color="#3b82f6" />
-                    </div>
-                    <div style={styles.detailText}>
-                      <span>Période : </span>
-                      <span style={styles.detailValue}>
-                        {formatDate(p.moisDebut)} • {p.nombreMois || 0} mois
-                      </span>
-                    </div>
-                  </div>
-                  <div style={{...styles.detailItem, borderBottom: 'none'}}>
                     <div style={{...styles.detailIcon, background: '#fef2f2'}}>
                       <AlertTriangle size={16} color="#dc2626" />
                     </div>
                     <div style={styles.detailText}>
                       <span>Expiré le : </span>
                       <span style={{...styles.detailValue, color: '#dc2626'}}>
-                        {calculerDateFin(p.moisDebut, p.nombreMois)}
+                        {formatDate(p.derniereFin)}
                       </span>
                     </div>
                   </div>
-                  {/* Note affichage */}
-                  {p.note && (
-                    <div style={{...styles.detailItem, borderBottom: 'none'}}>
-                      <div style={{...styles.detailIcon, background: '#fef3c7'}}>
-                        📝
-                      </div>
-                      <div style={styles.detailText}>
-                        <span>Note : </span>
-                        <span style={{...styles.detailValue, color: '#92400e'}}>
-                          {p.note}
-                        </span>
-                      </div>
+                  <div style={{...styles.detailItem, borderBottom: 'none'}}>
+                    <div style={{...styles.detailIcon, background: '#fef2f2'}}>
+                      <Clock size={16} color="#dc2626" />
                     </div>
-                  )}
-                  {/* 🧩 Bouton Payer maintenant */}
+                    <div style={styles.detailText}>
+                      <span>Jours expirés : </span>
+                      <span style={{...styles.detailValue, color: '#dc2626'}}>
+                        {joursExpirés} jour{joursExpirés > 1 ? 's' : ''}
+                      </span>
+                    </div>
+                  </div>
+                  
+                  {/* Bouton Payer maintenant */}
                   <button
                     onClick={() => payerEtudiant(p.etudiant?._id, p.cours)}
                     style={{
@@ -1046,7 +946,7 @@ const handleLogout = () => {
                      Payer maintenant
                   </button>
 
-                  {/* 🆕 Bouton Voir détails */}
+                  {/* Bouton Voir détails */}
                   <button
                     onClick={() => voirDetails(p)}
                     style={{
@@ -1084,24 +984,35 @@ const handleLogout = () => {
               <tr style={styles.tableHeader}>
                 <th style={styles.tableCellHeader}>Étudiant</th>
                 <th style={styles.tableCellHeader}>Cours</th>
-                <th style={styles.tableCellHeader}>Montant</th>
-                <th style={styles.tableCellHeader}>Période</th>
                 <th style={styles.tableCellHeader}>Date d'expiration</th>
                 <th style={styles.tableCellHeader}>Jours expirés</th>
-                <th style={styles.tableCellHeader}>Note</th>
+                <th style={styles.tableCellHeader}>Urgence</th>
                 <th style={styles.tableCellHeader}>Action</th>
               </tr>
             </thead>
             <tbody>
-              {filtered.map(p => {
-                const joursExpirés = calculerJoursExpirés(p.moisDebut, p.nombreMois);
+              {filtered.map((p, index) => {
+                const joursExpirés = calculerJoursExpirés(p.derniereFin);
+                const urgencyLevel = getUrgencyLevel(p.derniereFin);
                 const initiales = p.etudiant?.nomComplet 
                   ? p.etudiant.nomComplet.split(' ').map(n => n[0]).join('').toUpperCase()
                   : '?';
                 
+                const urgencyColors = {
+                  critique: { bg: '#fef2f2', color: '#dc2626', border: '#fecaca' },
+                  urgent: { bg: '#fef3c7', color: '#d97706', border: '#fed7aa' },
+                  recent: { bg: '#ecfdf5', color: '#059669', border: '#bbf7d0' }
+                };
+                
+                const urgencyLabels = {
+                  critique: 'Critique',
+                  urgent: 'Urgent',
+                  recent: 'Récent'
+                };
+                
                 return (
                   <tr 
-                    key={p._id} 
+                    key={`${p.etudiant?._id}_${p.cours}_${index}`}
                     style={styles.tableRow}
                     onMouseEnter={(e) => {
                       e.currentTarget.style.backgroundColor = '#f8fafc';
@@ -1137,21 +1048,8 @@ const handleLogout = () => {
                       </span>
                     </td>
                     <td style={styles.tableCell}>
-                      <span style={{fontWeight: '600', color: '#059669'}}>
-                        {(p.montant || 0).toLocaleString()} Dh
-                      </span>
-                    </td>
-                    <td style={styles.tableCell}>
-                      <div>
-                        <div>{formatDate(p.moisDebut)}</div>
-                        <div style={{fontSize: '12px', color: '#6b7280'}}>
-                          {p.nombreMois || 0} mois
-                        </div>
-                      </div>
-                    </td>
-                    <td style={styles.tableCell}>
                       <span style={{color: '#dc2626', fontWeight: '500'}}>
-                        {calculerDateFin(p.moisDebut, p.nombreMois)}
+                        {formatDate(p.derniereFin)}
                       </span>
                     </td>
                     <td style={styles.tableCell}>
@@ -1160,13 +1058,18 @@ const handleLogout = () => {
                       </div>
                     </td>
                     <td style={styles.tableCell}>
-                      {p.note ? (
-                        <span style={{ fontStyle: 'italic', color: '#92400e' }}>
-                          {p.note}
-                        </span>
-                      ) : (
-                        <span style={{ color: '#9ca3af' }}>—</span>
-                      )}
+                      <div style={{
+                        background: urgencyColors[urgencyLevel].bg,
+                        color: urgencyColors[urgencyLevel].color,
+                        padding: '4px 8px',
+                        borderRadius: '12px',
+                        fontSize: '12px',
+                        fontWeight: '600',
+                        border: `1px solid ${urgencyColors[urgencyLevel].border}`,
+                        display: 'inline-block'
+                      }}>
+                        {urgencyLabels[urgencyLevel]}
+                      </div>
                     </td>
                     <td style={styles.tableCell}>
                       <div style={{ display: 'flex', gap: '8px' }}>
@@ -1188,7 +1091,6 @@ const handleLogout = () => {
                         >
                           Payer
                         </button>
-                        {/* 🆕 Bouton Voir détails */}
                         <button
                           onClick={() => voirDetails(p)}
                           style={{
@@ -1221,7 +1123,7 @@ const handleLogout = () => {
         </div>
       )}
       
-      {/* 🆕 Modal Détails */}
+      {/* Modal Détails */}
       {showModal && selectedPaiement && (
         <div style={{
           position: 'fixed',
@@ -1278,7 +1180,7 @@ const handleLogout = () => {
               Détails du Paiement Expiré
             </h2>
             
-            {/* 🆕 Section avec image et infos étudiant */}
+            {/* Section avec image et infos étudiant */}
             <div style={{
               display: 'flex',
               alignItems: 'center',
@@ -1369,40 +1271,6 @@ const handleLogout = () => {
                 alignItems: 'center',
                 gap: '12px',
                 padding: '12px',
-                background: '#f0f9ff',
-                borderRadius: '8px'
-              }}>
-                <DollarSign size={20} color="#0ea5e9" />
-                <div>
-                  <span style={{ color: '#6b7280', fontSize: '14px' }}>Montant : </span>
-                  <span style={{ fontWeight: '600', color: '#0ea5e9' }}>
-                    {selectedPaiement.montant?.toLocaleString()} Dh
-                  </span>
-                </div>
-              </div>
-              
-              <div style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '12px',
-                padding: '12px',
-                background: '#fef3c7',
-                borderRadius: '8px'
-              }}>
-                <Calendar size={20} color="#d97706" />
-                <div>
-                  <span style={{ color: '#6b7280', fontSize: '14px' }}>Période : </span>
-                  <span style={{ fontWeight: '600', color: '#d97706' }}>
-                    {formatDate(selectedPaiement.moisDebut)} • {selectedPaiement.nombreMois} mois
-                  </span>
-                </div>
-              </div>
-              
-              <div style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '12px',
-                padding: '12px',
                 background: '#fef2f2',
                 borderRadius: '8px'
               }}>
@@ -1410,7 +1278,7 @@ const handleLogout = () => {
                 <div>
                   <span style={{ color: '#6b7280', fontSize: '14px' }}>Expiré le : </span>
                   <span style={{ fontWeight: '600', color: '#dc2626' }}>
-                    {calculerDateFin(selectedPaiement.moisDebut, selectedPaiement.nombreMois)}
+                    {formatDate(selectedPaiement.derniereFin)}
                   </span>
                 </div>
               </div>
@@ -1427,29 +1295,32 @@ const handleLogout = () => {
                 <div>
                   <span style={{ color: '#6b7280', fontSize: '14px' }}>Jours expirés : </span>
                   <span style={{ fontWeight: '600', color: '#dc2626' }}>
-                    {calculerJoursExpirés(selectedPaiement.moisDebut, selectedPaiement.nombreMois)} jours
+                    {calculerJoursExpirés(selectedPaiement.derniereFin)} jours
                   </span>
                 </div>
               </div>
               
-              {selectedPaiement.note && (
-                <div style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '12px',
-                  padding: '12px',
-                  background: '#fffbeb',
-                  borderRadius: '8px'
-                }}>
-                  <FileText size={20} color="#d97706" />
-                  <div>
-                    <span style={{ color: '#6b7280', fontSize: '14px' }}>Note : </span>
-                    <span style={{ fontWeight: '600', color: '#d97706' }}>
-                      {selectedPaiement.note}
-                    </span>
-                  </div>
+              {/* Urgence */}
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '12px',
+                padding: '12px',
+                background: '#fef3c7',
+                borderRadius: '8px'
+              }}>
+                <AlertTriangle size={20} color="#d97706" />
+                <div>
+                  <span style={{ color: '#6b7280', fontSize: '14px' }}>Niveau d'urgence : </span>
+                  <span style={{ fontWeight: '600', color: '#d97706' }}>
+                    {(() => {
+                      const urgency = getUrgencyLevel(selectedPaiement.derniereFin);
+                      const labels = { critique: 'Critique', urgent: 'Urgent', recent: 'Récent' };
+                      return labels[urgency] || 'Non défini';
+                    })()}
+                  </span>
                 </div>
-              )}
+              </div>
             </div>
             
             {/* Boutons d'action dans la modal */}
