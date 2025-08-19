@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
 import './ListeEtudiants.css';
@@ -13,9 +14,10 @@ import {
   Edit,   BookOpen, 
   Calendar, 
   Cake, 
-
+  MapPin,
   RotateCcw, X,
-  Trash2 
+  Trash2,
+  Mail
 } from "lucide-react";
 
 
@@ -36,11 +38,20 @@ const [formAjout, setFormAjout] = useState({
   nomComplet: '',
   genre: 'Homme',
   dateNaissance: '',
-  telephone: '',
-  email: '',           // NOUVEAU
-  motDePasse: '',      // NOUVEAU
+  telephoneEtudiant: '',
+  telephonePere: '',
+  telephoneMere: '',
+  codeMassar: '',
+  adresse: '',
+  email: '',
+  motDePasse: '',
   cours: [],
-  actif: true
+  actif: true,
+  prixTotal: 0,
+  paye: false,
+  pourcentageBourse: 0,
+  typePaiement: 'Cash',
+  anneeScolaire: '' // Remplace dateEtReglement
 });
   const [vueMode, setVueMode] = useState('tableau'); // 'tableau' ou 'carte'
 
@@ -59,11 +70,20 @@ const [formAjout, setFormAjout] = useState({
   nomComplet: '',
   genre: 'Homme',
   dateNaissance: '',
-  telephone: '',
-  email: '',           // NOUVEAU
-  motDePasse: '',      // NOUVEAU
+  telephoneEtudiant: '',
+  telephonePere: '',
+  telephoneMere: '',
+  codeMassar: '',
+  adresse: '',
+  email: '',
+  motDePasse: '',
   cours: [],
-  actif: true
+  actif: true,
+  prixTotal: 0,
+  paye: false,
+  pourcentageBourse: 0,
+  typePaiement: 'Cash',
+  anneeScolaire: '' // Remplace dateEtReglement
 });
   const [imageFileModifier, setImageFileModifier] = useState(null);
   const [messageModifier, setMessageModifier] = useState('');
@@ -85,7 +105,7 @@ const [formAjout, setFormAjout] = useState({
     try {
       setLoading(true);
       const token = localStorage.getItem('token');
-      const res = await axios.get('http://localhost:5000/api/etudiants', {
+      const res = await axios.get('http://195.179.229.230:5004/api/etudiants', {
         headers: { Authorization: `Bearer ${token}` }
       });
       setEtudiants(res.data);
@@ -99,7 +119,7 @@ const [formAjout, setFormAjout] = useState({
   const fetchCours = async () => {
     try {
       const token = localStorage.getItem('token');
-      const res = await axios.get('http://localhost:5000/api/cours', {
+      const res = await axios.get('http://195.179.229.230:5004/api/cours', {
         headers: { Authorization: `Bearer ${token}` }
       });
       setListeCours(res.data);
@@ -111,15 +131,15 @@ const [formAjout, setFormAjout] = useState({
 const filtrerEtudiants = () => {
   let resultats = etudiants;
 
-  // Filtre par recherche (nom, téléphone, email)
+  // Filtre par recherche (nom, téléphone, email, code massar)
 if (recherche) {
   resultats = resultats.filter(e =>
     (e.nomComplet && e.nomComplet.toLowerCase().includes(recherche.toLowerCase())) ||
-    (e.telephone && e.telephone.includes(recherche)) ||
-    (e.email && e.email.toLowerCase().includes(recherche.toLowerCase()))
+    (e.telephoneEtudiant && e.telephoneEtudiant.includes(recherche)) ||
+    (e.email && e.email.toLowerCase().includes(recherche.toLowerCase())) ||
+    (e.codeMassar && e.codeMassar.toLowerCase().includes(recherche.toLowerCase()))
   );
 }
-
 
     // Filtre par genre
     if (filtreGenre) {
@@ -154,9 +174,13 @@ if (recherche) {
     nomComplet: '',
     genre: 'Homme',
     dateNaissance: '',
-    telephone: '',
-    email: '',           // NOUVEAU
-    motDePasse: '',      // NOUVEAU
+    telephoneEtudiant: '',
+    telephonePere: '',
+    telephoneMere: '',
+    codeMassar: '',
+    adresse: '',
+    email: '',
+    motDePasse: '',
     cours: [],
     actif: true
   });
@@ -189,15 +213,24 @@ const handleSubmitAjout = async (e) => {
     formData.append('nomComplet', formAjout.nomComplet);
     formData.append('genre', formAjout.genre);
     formData.append('dateNaissance', formAjout.dateNaissance);
-    formData.append('telephone', formAjout.telephone);
-    formData.append('email', formAjout.email);           // NOUVEAU
-    formData.append('motDePasse', formAjout.motDePasse); // NOUVEAU
+    formData.append('telephoneEtudiant', formAjout.telephoneEtudiant);
+    formData.append('telephonePere', formAjout.telephonePere);
+    formData.append('telephoneMere', formAjout.telephoneMere);
+    formData.append('codeMassar', formAjout.codeMassar);
+    formData.append('adresse', formAjout.adresse);
+    formData.append('email', formAjout.email);
+    formData.append('motDePasse', formAjout.motDePasse);
     formData.append('actif', formAjout.actif);
+    formData.append('prixTotal', formAjout.prixTotal);
+    formData.append('paye', formAjout.paye);
+    formData.append('pourcentageBourse', formAjout.pourcentageBourse);
+    formData.append('typePaiement', formAjout.typePaiement);
+    formData.append('anneeScolaire', formAjout.anneeScolaire); // Remplace dateEtReglement
 
     formAjout.cours.forEach(c => formData.append('cours[]', c));
     if (imageFile) formData.append('image', imageFile);
 
-    const response = await axios.post('http://localhost:5000/api/etudiants', formData, {
+    const response = await axios.post('http://195.179.229.230:5004/api/etudiants', formData, {
       headers: {
         Authorization: `Bearer ${token}`,
         'Content-Type': 'multipart/form-data'
@@ -214,9 +247,13 @@ const handleSubmitAjout = async (e) => {
       nomComplet: '',
       genre: 'Homme',
       dateNaissance: '',
-      telephone: '',
-      email: '',           // NOUVEAU
-      motDePasse: '',      // NOUVEAU
+      telephoneEtudiant: '',
+      telephonePere: '',
+      telephoneMere: '',
+      codeMassar: '',
+      adresse: '',
+      email: '',
+      motDePasse: '',
       cours: [],
       actif: true
     });
@@ -242,16 +279,26 @@ const handleSubmitAjout = async (e) => {
     nomComplet: etudiant.nomComplet || '',
     genre: etudiant.genre || 'Homme',
     dateNaissance: etudiant.dateNaissance ? etudiant.dateNaissance.slice(0, 10) : '',
-    telephone: etudiant.telephone || '',
-    email: etudiant.email || '',           // NOUVEAU
-    motDePasse: '',                        // NOUVEAU (toujours vide pour sécurité)
+    telephoneEtudiant: etudiant.telephoneEtudiant || '',
+    telephonePere: etudiant.telephonePere || '',
+    telephoneMere: etudiant.telephoneMere || '',
+    codeMassar: etudiant.codeMassar || '',
+    adresse: etudiant.adresse || '',
+    email: etudiant.email || '',
+    motDePasse: '',
     cours: etudiant.cours || [],
-    actif: etudiant.actif ?? true
+    actif: etudiant.actif ?? true,
+    prixTotal: etudiant.prixTotal ?? 0,
+    paye: etudiant.paye ?? false,
+    pourcentageBourse: etudiant.pourcentageBourse ?? 0,
+    typePaiement: etudiant.typePaiement || 'Cash',
+    anneeScolaire: etudiant.anneeScolaire || '' // Remplace dateEtReglement
   });
   setImageFileModifier(null);
   setMessageModifier('');
   setShowEditModal(true);
 };
+
 const closeEditModal = () => {
   setShowEditModal(false);
   setEtudiantAModifier(null);
@@ -259,9 +306,13 @@ const closeEditModal = () => {
     nomComplet: '',
     genre: 'Homme',
     dateNaissance: '',
-    telephone: '',
-    email: '',           // NOUVEAU
-    motDePasse: '',      // NOUVEAU
+    telephoneEtudiant: '',
+    telephonePere: '',
+    telephoneMere: '',
+    codeMassar: '',
+    adresse: '',
+    email: '',
+    motDePasse: '',
     cours: [],
     actif: true
   });
@@ -294,20 +345,26 @@ const closeEditModal = () => {
     formData.append('nomComplet', formModifier.nomComplet);
     formData.append('genre', formModifier.genre);
     formData.append('dateNaissance', formModifier.dateNaissance);
-    formData.append('telephone', formModifier.telephone);
-    formData.append('email', formModifier.email);           // NOUVEAU
-    
-    // N'envoyer le mot de passe que s'il est rempli
-    if (formModifier.motDePasse.trim() !== '') {            // NOUVEAU
+    formData.append('telephoneEtudiant', formModifier.telephoneEtudiant);
+    formData.append('telephonePere', formModifier.telephonePere);
+    formData.append('telephoneMere', formModifier.telephoneMere);
+    formData.append('codeMassar', formModifier.codeMassar);
+    formData.append('adresse', formModifier.adresse);
+    formData.append('email', formModifier.email);
+    if (formModifier.motDePasse.trim() !== '') {
       formData.append('motDePasse', formModifier.motDePasse);
     }
-    
     formData.append('actif', formModifier.actif);
+    formData.append('prixTotal', formModifier.prixTotal);
+    formData.append('paye', formModifier.paye);
+    formData.append('pourcentageBourse', formModifier.pourcentageBourse);
+    formData.append('typePaiement', formModifier.typePaiement);
+    formData.append('anneeScolaire', formModifier.anneeScolaire); // Remplace dateEtReglement
 
     formModifier.cours.forEach(c => formData.append('cours[]', c));
     if (imageFileModifier) formData.append('image', imageFileModifier);
 
-    const response = await axios.put(`http://localhost:5000/api/etudiants/${etudiantAModifier._id}`, formData, {
+    const response = await axios.put(`http://195.179.229.230:5004/api/etudiants/${etudiantAModifier._id}`, formData, {
       headers: {
         Authorization: `Bearer ${token}`,
         'Content-Type': 'multipart/form-data'
@@ -335,7 +392,7 @@ const closeEditModal = () => {
   const handleToggleActif = async (id) => {
     try {
       const token = localStorage.getItem('token');
-      const res = await axios.patch(`http://localhost:5000/api/etudiants/${id}/actif`, {}, {
+      const res = await axios.patch(`http://195.179.229.230:5004/api/etudiants/${id}/actif`, {}, {
         headers: { Authorization: `Bearer ${token}` }
       });
       setEtudiants(etudiants.map(e => e._id === id ? res.data : e));
@@ -345,13 +402,11 @@ const closeEditModal = () => {
   };
 
   const handleDelete = async (id) => {
-    if (!window.confirm("🛑 "
-
-    )) return;
+    if (!window.confirm("🛑 Êtes-vous sûr de vouloir supprimer cet étudiant ?")) return;
 
     try {
       const token = localStorage.getItem('token');
-      await axios.delete(`http://localhost:5000/api/etudiants/${id}`, {
+      await axios.delete(`http://195.179.229.230:5004/api/etudiants/${id}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       setEtudiants(etudiants.filter(e => e._id !== id));
@@ -435,7 +490,7 @@ const closeEditModal = () => {
             Total: {etudiantsFiltres.length} étudiants
           </div>
           
-          {/* NOUVEAU: Boutons de basculement vue */}
+          {/* Boutons de basculement vue */}
           <div className="vue-toggle">
             <button 
               onClick={() => setVueMode('tableau')}
@@ -464,7 +519,7 @@ const closeEditModal = () => {
             <label>Rechercher:</label>
             <input
               type="text"
-              placeholder="Nom ou téléphone..."
+              placeholder="Nom, téléphone, email ou Code Massar..."
               value={recherche}
               onChange={(e) => setRecherche(e.target.value)}
               className="input-recherche"
@@ -484,13 +539,13 @@ const closeEditModal = () => {
             </select>
           </div>
           <div className="filtre-groupe">
-            <label>Cours:</label>
+            <label>Classe:</label>
             <select
               value={filtreCours}
               onChange={(e) => setFiltreCours(e.target.value)}
               className="select-filtre"
             >
-              <option value="">Tous les cours</option>
+              <option value="">Tous les classes</option>
               {coursUniques.map(cours => (
                 <option key={cours} value={cours}>{cours}</option>
               ))}
@@ -516,10 +571,9 @@ const closeEditModal = () => {
         </div>
       </div>
 
-      {/* Tableau des étudiants */}
-    {/* Vue Tableau ou Cartes */}
+      {/* Vue Tableau ou Cartes */}
 {vueMode === 'tableau' ? (
-  // VUE TABLEAU (votre code existant)
+  // VUE TABLEAU
   <div className="tableau-container">
     <table className="tableau-etudiants">
       <thead>
@@ -528,9 +582,10 @@ const closeEditModal = () => {
           <th>Genre</th>
           <th>Date de Naissance</th>
           <th>Âge</th>
-          <th>Téléphone</th>
+          <th>Tél. Étudiant</th>
+          <th>Code Massar</th>
           <th>Email</th>
-          <th>Cours</th>
+          <th>Classe</th>
           <th>Statut</th>
           <th>Image</th>
           <th>Actions</th>
@@ -539,7 +594,7 @@ const closeEditModal = () => {
       <tbody>
         {etudiantsActuels.length === 0 ? (
           <tr>
-            <td colSpan="9" className="aucun-resultat">
+            <td colSpan="11" className="aucun-resultat">
               Aucun étudiant trouvé
             </td>
           </tr>
@@ -550,10 +605,11 @@ const closeEditModal = () => {
               <td>{e.genre}</td>
               <td>{formatDate(e.dateNaissance)}</td>
               <td>{calculerAge(e.dateNaissance)} ans</td>
-              <td>{e.telephone}</td>
+              <td>{e.telephoneEtudiant}</td>
+              <td>{e.codeMassar}</td>
               <td>{e.email}</td>
               <td className="cours-colonne">
-                {e.cours.join(', ')}
+                {(Array.isArray(e.cours) && e.cours.length > 0) ? e.cours.join(', ') : ''}
               </td>
               <td className="statut-colonne">
                 <div className="toggle-switch-container">
@@ -573,7 +629,7 @@ const closeEditModal = () => {
               <td className="image-colonne">
                 {e.image ? (
                   <img 
-                    src={`http://localhost:5000${e.image}`} 
+                    src={`http://195.179.229.230:5004${e.image}`} 
                     alt="etudiant" 
                     className="image-etudiant"
                   />
@@ -608,7 +664,7 @@ const closeEditModal = () => {
     </table>
   </div>
 ) : (
-  // VUE CARTES (nouvelle)
+  // VUE CARTES
 
 <div className="cartes-container">
   {etudiantsActuels.length === 0 ? (
@@ -623,7 +679,7 @@ const closeEditModal = () => {
             <div className="carte-image">
               {e.image ? (
                 <img 
-                  src={`http://localhost:5000${e.image}`} 
+                  src={`http://195.179.229.230:5004${e.image}`} 
                   alt="etudiant" 
                   className="carte-photo"
                 />
@@ -654,25 +710,30 @@ const closeEditModal = () => {
                 <span>{calculerAge(e.dateNaissance)} ans</span>
               </div>
               <div className="carte-detail">
-                <span className="carte-label">Téléphone:</span>
-         
+                <span className="carte-label">Tél. Étudiant:</span>
                 <span>
-                  <Phone size={16} className="inline mr-1" /> {e.telephone}
+                  <Phone size={16} className="inline mr-1" /> {e.telephoneEtudiant}
                 </span>
               </div>
-                     <div className="carte-detail">
-  <span className="carte-label">Email:</span>
-  <span>{e.email}</span>
-</div>
+              <div className="carte-detail">
+                <span className="carte-label">Code Massar:</span>
+                <span>{e.codeMassar}</span>
+              </div>
+              <div className="carte-detail">
+                <span className="carte-label">Email:</span>
+                <span>
+                  <Mail size={16} className="inline mr-1" /> {e.email}
+                </span>
+              </div>
               <div className="carte-detail cours-detail">
-                <span className="carte-label">Cours:</span>
+                <span className="carte-label">Classe:</span>
                 <div className="carte-cours">
-                  {e.cours.length > 0 ? (
+                  {(Array.isArray(e.cours) && e.cours.length > 0) ? (
                     e.cours.map((cours, index) => (
                       <span key={index} className="cours-tag">{cours}</span>
                     ))
                   ) : (
-                    <span className="no-cours">Aucun cours</span>
+                    <span className="no-cours">Aucun classe</span>
                   )}
                 </div>
               </div>
@@ -764,75 +825,129 @@ const closeEditModal = () => {
             </div>
             
             <form onSubmit={handleSubmitAjout} className="form-ajout-etudiant">
+              <div className="form-row">
+                <div className="form-group">
+                  <label>Nom Complet *</label>
+                  <input
+                    type="text"
+                    name="nomComplet"
+                    placeholder="Nom complet"
+                    value={formAjout.nomComplet}
+                    onChange={handleChangeAjout}
+                    required
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label>Genre *</label>
+                  <select name="genre" value={formAjout.genre} onChange={handleChangeAjout}>
+                    <option value="Homme">Homme</option>
+                    <option value="Femme">Femme</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="form-row">
+                <div className="form-group">
+                  <label>Date de Naissance *</label>
+                  <input
+                    type="date"
+                    name="dateNaissance"
+                    value={formAjout.dateNaissance}
+                    onChange={handleChangeAjout}
+                    required
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label>Code Massar *</label>
+                  <input
+                    type="text"
+                    name="codeMassar"
+                    placeholder="Code Massar"
+                    value={formAjout.codeMassar}
+                    onChange={handleChangeAjout}
+                    required
+                  />
+                </div>
+              </div>
+
+              <div className="form-row">
+                <div className="form-group">
+                  <label>Téléphone Étudiant *</label>
+                  <input
+                    type="text"
+                    name="telephoneEtudiant"
+                    placeholder="Téléphone de l'étudiant"
+                    value={formAjout.telephoneEtudiant}
+                    onChange={handleChangeAjout}
+                    required
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label>Email *</label>
+                  <input
+                    type="email"
+                    name="email"
+                    placeholder="Email"
+                    value={formAjout.email}
+                    onChange={handleChangeAjout}
+                    required
+                  />
+                </div>
+              </div>
+
+              <div className="form-row">
+                <div className="form-group">
+                  <label>Téléphone Père</label>
+                  <input
+                    type="text"
+                    name="telephonePere"
+                    placeholder="Téléphone du père (optionnel)"
+                    value={formAjout.telephonePere}
+                    onChange={handleChangeAjout}
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label>Téléphone Mère</label>
+                  <input
+                    type="text"
+                    name="telephoneMere"
+                    placeholder="Téléphone de la mère (optionnel)"
+                    value={formAjout.telephoneMere}
+                    onChange={handleChangeAjout}
+                  />
+                </div>
+              </div>
+
               <div className="form-group">
-                <label>Nom Complet *</label>
+                <label>Mot de Passe *</label>
                 <input
-                  type="text"
-                  name="nomComplet"
-                  placeholder="Nom complet"
-                  value={formAjout.nomComplet}
+                  type="password"
+                  name="motDePasse"
+                  placeholder="Mot de passe (minimum 6 caractères)"
+                  value={formAjout.motDePasse}
                   onChange={handleChangeAjout}
                   required
+                  minLength="6"
                 />
               </div>
 
               <div className="form-group">
-                <label>Genre *</label>
-                <select name="genre" value={formAjout.genre} onChange={handleChangeAjout}>
-                  <option value="Homme">Homme</option>
-                  <option value="Femme">Femme</option>
-                </select>
-              </div>
-
-              <div className="form-group">
-                <label>Date de Naissance *</label>
-                <input
-                  type="date"
-                  name="dateNaissance"
-                  value={formAjout.dateNaissance}
+                <label>Adresse</label>
+                <textarea
+                  name="adresse"
+                  placeholder="Adresse complète (optionnel)"
+                  value={formAjout.adresse}
                   onChange={handleChangeAjout}
-                  required
+                  rows="3"
                 />
               </div>
 
               <div className="form-group">
-                <label>Téléphone *</label>
-                <input
-                  type="text"
-                  name="telephone"
-                  placeholder="Téléphone"
-                  value={formAjout.telephone}
-                  onChange={handleChangeAjout}
-                  required
-                />
-              </div>
-<div className="form-group">
-  <label>Email *</label>
-  <input
-    type="email"
-    name="email"
-    placeholder="Email"
-    value={formAjout.email}
-    onChange={handleChangeAjout}
-    required
-  />
-</div>
-
-<div className="form-group">
-  <label>Mot de Passe *</label>
-  <input
-    type="password"
-    name="motDePasse"
-    placeholder="Mot de passe"
-    value={formAjout.motDePasse}
-    onChange={handleChangeAjout}
-    required
-    minLength="6"
-  />
-</div>
-
-              <div className="form-group">
-                <label>Cours (multi-sélection possible)</label>
+                <label>Classe </label>
                 <div className="cours-selection-container">
                   {listeCours.map((cours) => (
                     <div
@@ -849,31 +964,88 @@ const closeEditModal = () => {
                 </div>
                 {formAjout.cours.length > 0 && (
                   <div className="cours-selectionnes">
-                    <small>Cours sélectionnés: {formAjout.cours.join(', ')}</small>
+                    <small>Classe sélectionnés: {formAjout.cours.join(', ')}</small>
                   </div>
                 )}
               </div>
 
-              <div className="form-group">
-                <label>Image</label>
-                <input
-                  type="file"
-                  name="image"
-                  accept="image/*"
-                  onChange={handleImageChangeAjout}
-                />
+              <div className="form-row">
+                <div className="form-group">
+                  <label>Image</label>
+                  <input
+                    type="file"
+                    name="image"
+                    accept="image/*"
+                    onChange={handleImageChangeAjout}
+                  />
+                </div>
+
+                <div className="form-group checkbox-group">
+                  <label className="checkbox-label">
+                    <input
+                      type="checkbox"
+                      name="actif"
+                      checked={formAjout.actif}
+                      onChange={handleChangeAjout}
+                    />
+                    Étudiant actif
+                  </label>
+                </div>
               </div>
 
-              <div className="form-group checkbox-group">
-                <label className="checkbox-label">
-                  <input
-                    type="checkbox"
-                    name="actif"
-                    checked={formAjout.actif}
-                    onChange={handleChangeAjout}
-                  />
-                  Étudiant actif
-                </label>
+              <div className="form-group">
+                <label>Prix Total</label>
+                <input
+                  type="number"
+                  name="prixTotal"
+                  placeholder="Prix total"
+                  value={formAjout.prixTotal}
+                  onChange={handleChangeAjout}
+                  min="0"
+                  step="0.01"
+                />
+              </div>
+              <div className="form-group">
+                <label>Payé</label>
+                <select name="paye" value={formAjout.paye} onChange={handleChangeAjout}>
+                  <option value={true}>Oui</option>
+                  <option value={false}>Non</option>
+                </select>
+              </div>
+              <div className="form-group">
+                <label>Pourcentage Bourse (%)</label>
+                <input
+                  type="number"
+                  name="pourcentageBourse"
+                  placeholder="Pourcentage bourse"
+                  value={formAjout.pourcentageBourse}
+                  onChange={handleChangeAjout}
+                  min="0"
+                  max="100"
+                  step="1"
+                />
+              </div>
+              <div className="form-group">
+                <label>Type Paiement</label>
+                <select name="typePaiement" value={formAjout.typePaiement} onChange={handleChangeAjout}>
+                  <option value="Cash">Cash</option>
+                  <option value="Virement">Virement</option>
+                  <option value="Chèque">Chèque</option>
+                  <option value="En ligne">En ligne</option>
+                </select>
+              </div>
+              <div className="form-group">
+                <label>Année Scolaire *</label>
+                <input
+                  type="text"
+                  name="anneeScolaire"
+                  placeholder="ex: 2023/2024"
+                  value={formAjout.anneeScolaire}
+                  onChange={handleChangeAjout}
+                  required
+                  pattern="\d{4}/\d{4}"
+                  title="Format attendu: YYYY/YYYY"
+                />
               </div>
 
               {messageAjout && (
@@ -937,45 +1109,91 @@ const closeEditModal = () => {
               </div>
 
               <div className="form-group">
-                <label>Téléphone *</label>
+                <label>Téléphone Étudiant *</label>
                 <input
                   type="text"
-                  name="telephone"
-                  placeholder="Téléphone"
-                  value={formModifier.telephone}
+                  name="telephoneEtudiant"
+                  placeholder="Téléphone de l'étudiant"
+                  value={formModifier.telephoneEtudiant}
                   onChange={handleChangeModifier}
                   required
                 />
               </div>
-<div className="form-group">
-  <label>Email *</label>
-  <input
-    type="email"
-    name="email"
-    placeholder="Email"
-    value={formModifier.email}
-    onChange={handleChangeModifier}
-    required
-  />
-</div>
-
-<div className="form-group">
-  <label>Nouveau Mot de Passe</label>
-  <input
-    type="password"
-    name="motDePasse"
-    placeholder="Laisser vide pour garder l'ancien"
-    value={formModifier.motDePasse}
-    onChange={handleChangeModifier}
-    minLength="6"
-  />
-  <small style={{color: '#666', fontSize: '12px'}}>
-    Laisser vide pour conserver le mot de passe actuel
-  </small>
-</div>
 
               <div className="form-group">
-                <label>Cours (multi-sélection possible)</label>
+                <label>Téléphone Père</label>
+                <input
+                  type="text"
+                  name="telephonePere"
+                  placeholder="Téléphone du père"
+                  value={formModifier.telephonePere}
+                  onChange={handleChangeModifier}
+                />
+              </div>
+
+              <div className="form-group">
+                <label>Téléphone Mère</label>
+                <input
+                  type="text"
+                  name="telephoneMere"
+                  placeholder="Téléphone de la mère"
+                  value={formModifier.telephoneMere}
+                  onChange={handleChangeModifier}
+                />
+              </div>
+
+              <div className="form-group">
+                <label>Code Massar *</label>
+                <input
+                  type="text"
+                  name="codeMassar"
+                  placeholder="Code Massar"
+                  value={formModifier.codeMassar}
+                  onChange={handleChangeModifier}
+                  required
+                />
+              </div>
+
+              <div className="form-group">
+                <label>Adresse</label>
+                <textarea
+                  name="adresse"
+                  placeholder="Adresse complète"
+                  value={formModifier.adresse}
+                  onChange={handleChangeModifier}
+                  rows="3"
+                />
+              </div>
+
+              <div className="form-group">
+                <label>Email *</label>
+                <input
+                  type="email"
+                  name="email"
+                  placeholder="Email"
+                  value={formModifier.email}
+                  onChange={handleChangeModifier}
+                  required
+                />
+              </div>
+
+              <div className="form-group">
+                <label>Nouveau Mot de Passe</label>
+                <input
+                  type="password"
+                  name="motDePasse"
+                  placeholder="Laisser vide pour garder l'ancien"
+                  value={formModifier.motDePasse}
+                  onChange={handleChangeModifier}
+                  minLength="6"
+                />
+                <small style={{color: '#666', fontSize: '12px'}}>
+                  Laisser vide pour conserver le mot de passe actuel
+                </small>
+              </div>
+
+              <div className="form-group">
+                <label>Classe</label>
                 <div className="cours-selection-container">
                   {listeCours.map((cours) => (
                     <div
@@ -992,7 +1210,7 @@ const closeEditModal = () => {
                 </div>
                 {formModifier.cours.length > 0 && (
                   <div className="cours-selectionnes">
-                    <small>Cours sélectionnés: {formModifier.cours.join(', ')}</small>
+                    <small>Classe sélectionnés: {formModifier.cours.join(', ')}</small>
                   </div>
                 )}
               </div>
@@ -1009,7 +1227,7 @@ const closeEditModal = () => {
                   <div className="image-actuelle">
                     <small>Image actuelle :</small>
                     <img 
-                      src={`http://localhost:5000${etudiantAModifier.image}`} 
+                      src={`http://195.179.229.230:5004${etudiantAModifier.image}`} 
                       alt="Image actuelle" 
                       className="image-preview"
                       style={{width: '50px', height: '50px', objectFit: 'cover', borderRadius: '4px'}}
@@ -1028,6 +1246,61 @@ const closeEditModal = () => {
                   />
                   Étudiant actif
                 </label>
+              </div>
+
+              <div className="form-group">
+                <label>Prix Total</label>
+                <input
+                  type="number"
+                  name="prixTotal"
+                  placeholder="Prix total"
+                  value={formModifier.prixTotal}
+                  onChange={handleChangeModifier}
+                  min="0"
+                  step="0.01"
+                />
+              </div>
+              <div className="form-group">
+                <label>Payé</label>
+                <select name="paye" value={formModifier.paye} onChange={handleChangeModifier}>
+                  <option value={true}>Oui</option>
+                  <option value={false}>Non</option>
+                </select>
+              </div>
+              <div className="form-group">
+                <label>Pourcentage Bourse (%)</label>
+                <input
+                  type="number"
+                  name="pourcentageBourse"
+                  placeholder="Pourcentage bourse"
+                  value={formModifier.pourcentageBourse}
+                  onChange={handleChangeModifier}
+                  min="0"
+                  max="100"
+                  step="1"
+                />
+              </div>
+              <div className="form-group">
+                <label>Type Paiement</label>
+                <select name="typePaiement" value={formModifier.typePaiement} onChange={handleChangeModifier}>
+                  <option value="Cash">Cash</option>
+                  <option value="Virement">Virement</option>
+                  <option value="Chèque">Chèque</option>
+                  <option value="En ligne">En ligne</option>
+                </select>
+              </div>
+              <div className="form-group">
+                <label>Année Scolaire *</label>
+                <input
+                  type="text"
+                  name="anneeScolaire"
+                  placeholder="ex: 2023/2024"
+                  value={formModifier.anneeScolaire}
+                  onChange={handleChangeModifier}
+                  required
+                  pattern="\d{4}/\d{4}"
+                  title="Format attendu: YYYY/YYYY"
+                />
               </div>
 
               {messageModifier && (
@@ -1051,116 +1324,149 @@ const closeEditModal = () => {
 
       {/* Modal de visualisation d'étudiant */}
       {showViewModal && etudiantSelectionne && (
-      
-<div className="modal-overlay" onClick={closeViewModal}>
-  <div className="modal-content modal-view" onClick={(e) => e.stopPropagation()}>
-    <div className="modal-header">
-      <h3>Informations de l'étudiant</h3>
-      <button className="btn-fermer-modal" onClick={closeViewModal}>
-        <X size={20} />
-      </button>
-    </div>
-    
-    <div className="etudiant-details">
-      <div className="etudiant-header">
-        <div className="etudiant-image-section">
-          {etudiantSelectionne.image ? (
-            <img 
-              src={`http://localhost:5000${etudiantSelectionne.image}`} 
-              alt="Photo de l'étudiant" 
-              className="etudiant-image-large"
-            />
-          ) : (
-            <div className="etudiant-image-placeholder">
-              <User size={48} />
+        <div className="modal-overlay" onClick={closeViewModal}>
+          <div className="modal-content modal-view" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>Informations de l'étudiant</h3>
+              <button className="btn-fermer-modal" onClick={closeViewModal}>
+                <X size={20} />
+              </button>
             </div>
-          )}
-        </div>
-        <div className="etudiant-info-principal">
-          <h2>{etudiantSelectionne.nomComplet}</h2>
-          <div className="statut-badge">
-            <span className={`badge ${etudiantSelectionne.actif ? 'actif' : 'inactif'}`}>
-              {etudiantSelectionne.actif ? (
-                <>
-                  <CheckCircle size={16} className="inline mr-1" /> Actif
-                </>
-              ) : (
-                <>
-                  <XCircle size={16} className="inline mr-1" /> Inactif
-                </>
-              )}
-            </span>
+            
+            <div className="etudiant-details">
+              <div className="etudiant-header">
+                <div className="etudiant-image-section">
+                  {etudiantSelectionne.image ? (
+                    <img 
+                      src={`http://195.179.229.230:5004${etudiantSelectionne.image}`} 
+                      alt="Photo de l'étudiant" 
+                      className="etudiant-image-large"
+                    />
+                  ) : (
+                    <div className="etudiant-image-placeholder">
+                      <User size={48} />
+                    </div>
+                  )}
+                </div>
+                <div className="etudiant-info-principal">
+                  <h2>{etudiantSelectionne.nomComplet}</h2>
+                  <div className="statut-badge">
+                    <span className={`badge ${etudiantSelectionne.actif ? 'actif' : 'inactif'}`}>
+                      {etudiantSelectionne.actif ? (
+                        <>
+                          <CheckCircle size={16} className="inline mr-1" /> Actif
+                        </>
+                      ) : (
+                        <>
+                          <XCircle size={16} className="inline mr-1" /> Inactif
+                        </>
+                      )}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="etudiant-info-grid">
+                <div className="info-card">
+                  <div className="info-label">Genre</div>
+                  <div className="info-value">
+                    <User size={16} className="inline mr-1" /> {etudiantSelectionne.genre}
+                  </div>
+                </div>
+
+                <div className="info-card">
+                  <div className="info-label">Date de Naissance</div>
+                  <div className="info-value">
+                    <Calendar size={16} className="inline mr-1" /> {formatDate(etudiantSelectionne.dateNaissance)}
+                  </div>
+                </div>
+
+                <div className="info-card">
+                  <div className="info-label">Âge</div>
+                  <div className="info-value">
+                    <Cake size={16} className="inline mr-1" /> {calculerAge(etudiantSelectionne.dateNaissance)} ans
+                  </div>
+                </div>
+
+                <div className="info-card">
+                  <div className="info-label">Téléphone Étudiant</div>
+                  <div className="info-value">
+                    <Phone size={16} className="inline mr-1" /> {etudiantSelectionne.telephoneEtudiant}
+                  </div>
+                </div>
+
+                {etudiantSelectionne.telephonePere && (
+                  <div className="info-card">
+                    <div className="info-label">Téléphone Père</div>
+                    <div className="info-value">
+                      <Phone size={16} className="inline mr-1" /> {etudiantSelectionne.telephonePere}
+                    </div>
+                  </div>
+                )}
+
+                {etudiantSelectionne.telephoneMere && (
+                  <div className="info-card">
+                    <div className="info-label">Téléphone Mère</div>
+                    <div className="info-value">
+                      <Phone size={16} className="inline mr-1" /> {etudiantSelectionne.telephoneMere}
+                    </div>
+                  </div>
+                )}
+
+                <div className="info-card">
+                  <div className="info-label">Code Massar</div>
+                  <div className="info-value">{etudiantSelectionne.codeMassar}</div>
+                </div>
+
+                <div className="info-card">
+                  <div className="info-label">Email</div>
+                  <div className="info-value">
+                    <Mail size={16} className="inline mr-1" /> {etudiantSelectionne.email}
+                  </div>
+                </div>
+
+                {etudiantSelectionne.adresse && (
+                  <div className="info-card full-width">
+                    <div className="info-label">Adresse</div>
+                    <div className="info-value">
+                      <MapPin size={16} className="inline mr-1" /> {etudiantSelectionne.adresse}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <div className="cours-section">
+                <h4>
+                  <BookOpen size={20} className="inline mr-2" /> Classe Inscrits
+                </h4>
+                <div className="cours-badges">
+                  {(Array.isArray(etudiantSelectionne.cours) && etudiantSelectionne.cours.length > 0) ? (
+                    etudiantSelectionne.cours.map((cours, index) => (
+                      <span key={index} className="cours-badge">{cours}</span>
+                    ))
+                  ) : (
+                    <span className="no-cours">Aucun classe inscrit</span>
+                  )}
+                </div>
+              </div>
+
+              <div className="modal-actions">
+                <button 
+                  onClick={() => {
+                    closeViewModal();
+                    openEditModal(etudiantSelectionne);
+                  }}
+                  className="btn-modifier-depuis-view"
+                >
+                  <Edit size={16} className="inline mr-1" /> Modifier
+                </button>
+                <button onClick={closeViewModal} className="btn-fermer">
+                  Fermer
+                </button>
+              </div>
+            </div>
           </div>
         </div>
-      </div>
-
-      <div className="etudiant-info-grid">
-        <div className="info-card">
-          <div className="info-label">Genre</div>
-          <div className="info-value">
-            <User size={16} className="inline mr-1" /> {etudiantSelectionne.genre}
-          </div>
-        </div>
-
-        <div className="info-card">
-          <div className="info-label">Date de Naissance</div>
-          <div className="info-value">
-            <Calendar size={16} className="inline mr-1" /> {formatDate(etudiantSelectionne.dateNaissance)}
-          </div>
-        </div>
-
-        <div className="info-card">
-          <div className="info-label">Âge</div>
-          <div className="info-value">
-            <Cake size={16} className="inline mr-1" /> {calculerAge(etudiantSelectionne.dateNaissance)} ans
-          </div>
-        </div>
-
-        <div className="info-card">
-          <div className="info-label">Téléphone</div>
-          <div className="info-value">
-            <Phone size={16} className="inline mr-1" /> {etudiantSelectionne.telephone}
-          </div>
-        </div>
-      </div>
-<div className="info-card">
-  <div className="info-label">Email</div>
-  <div className="info-value">
-     {etudiantSelectionne.email}
-  </div>
-</div>
-      <div className="cours-section">
-        <h4>
-          <BookOpen size={20} className="inline mr-2" /> Cours Inscrits
-        </h4>
-        <div className="cours-badges">
-          {etudiantSelectionne.cours.length > 0 ? (
-            etudiantSelectionne.cours.map((cours, index) => (
-              <span key={index} className="cours-badge">{cours}</span>
-            ))
-          ) : (
-            <span className="no-cours">Aucun cours inscrit</span>
-          )}
-        </div>
-      </div>
-
-      <div className="modal-actions">
-        <button 
-          onClick={() => {
-            closeViewModal();
-            openEditModal(etudiantSelectionne);
-          }}
-          className="btn-modifier-depuis-view"
-        >
-          <Edit size={16} className="inline mr-1" /> Modifier
-        </button>
-        <button onClick={closeViewModal} className="btn-fermer">
-          Fermer
-        </button>
-      </div>
-    </div>
-  </div>
-</div>
       )}
     </div>
   );

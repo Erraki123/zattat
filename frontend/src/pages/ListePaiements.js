@@ -118,7 +118,7 @@ const [filters, setFilters] = useState({
   const fetchPaiements = async () => {
     try {
       const token = localStorage.getItem('token');
-      const res = await fetch('http://localhost:5000/api/paiements', {
+      const res = await fetch('http://195.179.229.230:5004/api/paiements', {
         headers: { Authorization: `Bearer ${token}` }
       });
       const data = await res.json();
@@ -132,7 +132,7 @@ const [filters, setFilters] = useState({
   const fetchExpirés = async () => {
     try {
       const token = localStorage.getItem('token');
-      const res = await fetch('http://localhost:5000/api/paiements/exp', {
+      const res = await fetch('http://195.179.229.230:5004/api/paiements/exp', {
         headers: { Authorization: `Bearer ${token}` }
       });
       const data = await res.json();
@@ -249,13 +249,13 @@ const AdvancedFilters = () => (
         
         {/* Filtre par cours */}
         <div style={styles.filterGroup}>
-          <label style={styles.filterLabel}>Cours</label>
+          <label style={styles.filterLabel}>Classe</label>
           <input
             type="text"
             value={filters.cours}
             onChange={(e) => setFilters({...filters, cours: e.target.value})}
             style={styles.filterInput}
-            placeholder="Nom du cours..."
+            placeholder="Nom de la classe..."
           />
         </div>
         
@@ -1198,7 +1198,7 @@ subtitle: {
               </div>
               <input
                 type="text"
-                placeholder="Rechercher par nom, cours ou note..."
+                placeholder="Rechercher par nom, classe ou note..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 style={styles.searchInput}
@@ -1265,7 +1265,7 @@ subtitle: {
               <thead style={styles.thead}>
                 <tr>
                   <th style={styles.th}>Étudiant</th>
-                  <th style={styles.th}>Cours</th>
+                  <th style={styles.th}>Classe</th>
                   <th style={styles.th}>Début</th>
                   <th style={styles.th}>Fin</th>
                   <th style={styles.th}>Durée</th>
@@ -1476,7 +1476,7 @@ subtitle: {
                   <div style={styles.detailItem}>
                     <div style={styles.detailLabel}>
                       <BookOpen size={16} />
-                      Cours
+                      Classe
                     </div>
                     <div style={styles.detailValue}>
                       {Array.isArray(selectedPaiement.cours) 

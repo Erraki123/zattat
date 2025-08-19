@@ -6,51 +6,59 @@ import {
   CheckCircle, 
   XCircle, 
   BookOpen,
-  GraduationCap
+  GraduationCap,
+  MapPin,
+  Hash,
+  Users,
+  DollarSign,
+  Percent,
+  Receipt,
+  CreditCard
 } from 'lucide-react';
-import Sidebar from '../components/sidebaretudiant'; // ✅ ا
+import Sidebar from '../components/sidebaretudiant';
 import { useNavigate } from 'react-router-dom';
 
-  const handleLogout = () => {
-    localStorage.removeItem('token');
-    window.location.href = '/';
-  };
+const handleLogout = () => {
+  // Note: In production, use React state instead of localStorage
+  localStorage.removeItem('token');
+  window.location.href = '/';
+};
 
 const ProfileEtudiant = () => {
   const [etudiant, setEtudiant] = useState(null);
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
 
- useEffect(() => {
-  const role = localStorage.getItem('role');
-  const token = localStorage.getItem('token');
+  useEffect(() => {
+    const role = localStorage.getItem('role');
+    const token = localStorage.getItem('token');
 
-  if (role !== 'etudiant' || !token) {
-    navigate('/');
-    return;
-  }
-
-  const fetchProfile = async () => {
-    try {
-      const res = await fetch('http://localhost:5000/api/etudiant/profile', {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-
-      if (!res.ok) {
-        throw new Error('Échec de chargement du profil');
-      }
-
-      const data = await res.json();
-      setEtudiant(data);
-    } catch (err) {
-      console.error('Erreur chargement profil:', err);
-    } finally {
-      setLoading(false);
+    if (role !== 'etudiant' || !token) {
+      navigate('/');
+      return;
     }
-  };
 
-  fetchProfile();
-}, []);
+    const fetchProfile = async () => {
+      try {
+        const res = await fetch('http://195.179.229.230:5004/api/etudiant/profile', {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+
+        if (!res.ok) {
+          throw new Error('Échec de chargement du profil');
+        }
+
+        const data = await res.json();
+        setEtudiant(data);
+      } catch (err) {
+        console.error('Erreur chargement profil:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchProfile();
+  }, [navigate]);
 
   const calculerAge = (dateNaissance) => {
     if (!dateNaissance) return 'N/A';
@@ -62,6 +70,22 @@ const ProfileEtudiant = () => {
       age--;
     }
     return `${age} ans`;
+  };
+
+  const formatDate = (date) => {
+    if (!date) return 'Non renseigné';
+    return new Date(date).toLocaleDateString('fr-FR', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric'
+    });
+  };
+
+  // Ajout du calcul du montant à payer après bourse
+  const getMontantAPayer = () => {
+    if (!etudiant || !etudiant.prixTotal) return 0;
+    const reduction = (etudiant.prixTotal * (etudiant.pourcentageBourse || 0)) / 100;
+    return etudiant.prixTotal - reduction;
   };
 
   if (loading) {
@@ -84,15 +108,12 @@ const ProfileEtudiant = () => {
 
   return (
     <div style={styles.container}>
-      {/* Header */}           <Sidebar onLogout={handleLogout} />
-
+      <Sidebar onLogout={handleLogout} />
       <div style={styles.header}>
         <div style={{ ...styles.headerContent, display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
           <h1 style={{ ...styles.headerTitle, textAlign: 'center', width: '100%' }}>Mon Profil</h1>
         </div>
       </div>
-
-      {/* Main Content */}
       <div style={styles.mainContent}>
         {/* Profile Card */}
         <div style={styles.profileCard}>
@@ -100,7 +121,7 @@ const ProfileEtudiant = () => {
             <div style={styles.avatarContainer}>
               {etudiant.image ? (
                 <img
-                  src={`http://localhost:5000${etudiant.image}`}
+                  src={`http://195.179.229.230:5004${etudiant.image}`}
                   alt="Profil"
                   style={styles.avatar}
                 />
@@ -142,10 +163,10 @@ const ProfileEtudiant = () => {
             </div>
             <div style={styles.cardContent}>
               <div style={styles.infoItem}>
-                <Phone size={18} color="#6b7280" />
+                <GraduationCap size={18} color="#6b7280" />
                 <div style={styles.infoDetails}>
-                  <span style={styles.infoLabel}>Téléphone</span>
-                  <span style={styles.infoValue}>{etudiant.telephone}</span>
+                  <span style={styles.infoLabel}>Genre</span>
+                  <span style={styles.infoValue}>{etudiant.genre || 'Non renseigné'}</span>
                 </div>
               </div>
               <div style={styles.infoItem}>
@@ -153,16 +174,60 @@ const ProfileEtudiant = () => {
                 <div style={styles.infoDetails}>
                   <span style={styles.infoLabel}>Date de naissance</span>
                   <span style={styles.infoValue}>
-                    {etudiant.dateNaissance?.split('T')[0]} ({calculerAge(etudiant.dateNaissance)})
+                    {etudiant.dateNaissance ? (
+                      `${formatDate(etudiant.dateNaissance)} (${calculerAge(etudiant.dateNaissance)})`
+                    ) : 'Non renseigné'}
                   </span>
                 </div>
               </div>
-              {etudiant.genre && (
+              <div style={styles.infoItem}>
+                <Hash size={18} color="#6b7280" />
+                <div style={styles.infoDetails}>
+                  <span style={styles.infoLabel}>Code Massar</span>
+                  <span style={styles.infoValue}>{etudiant.codeMassar || 'Non renseigné'}</span>
+                </div>
+              </div>
+              {etudiant.adresse && (
                 <div style={styles.infoItem}>
-                  <GraduationCap size={18} color="#6b7280" />
+                  <MapPin size={18} color="#6b7280" />
                   <div style={styles.infoDetails}>
-                    <span style={styles.infoLabel}>Genre</span>
-                    <span style={styles.infoValue}>{etudiant.genre}</span>
+                    <span style={styles.infoLabel}>Adresse</span>
+                    <span style={styles.infoValue}>{etudiant.adresse}</span>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Contact Information */}
+          <div style={styles.infoCard}>
+            <div style={styles.cardHeader}>
+              <Phone size={20} color="#059669" />
+              <h3 style={styles.cardTitle}>Informations de Contact</h3>
+            </div>
+            <div style={styles.cardContent}>
+              <div style={styles.infoItem}>
+                <Phone size={18} color="#6b7280" />
+                <div style={styles.infoDetails}>
+                  <span style={styles.infoLabel}>Téléphone Étudiant</span>
+                  <span style={styles.infoValue}>{etudiant.telephoneEtudiant || 'Non renseigné'}</span>
+                </div>
+              </div>
+              {etudiant.telephonePere && (
+                <div style={styles.infoItem}>
+                  <Users size={18} color="#6b7280" />
+                  <div style={styles.infoDetails}>
+                    <span style={styles.infoLabel}>Téléphone Père</span>
+                    <span style={styles.infoValue}>{etudiant.telephonePere}</span>
+                  </div>
+                </div>
+              )}
+              {etudiant.telephoneMere && (
+                <div style={styles.infoItem}>
+                  <Users size={18} color="#6b7280" />
+                  <div style={styles.infoDetails}>
+                    <span style={styles.infoLabel}>Téléphone Mère</span>
+                    <span style={styles.infoValue}>{etudiant.telephoneMere}</span>
                   </div>
                 </div>
               )}
@@ -172,8 +237,8 @@ const ProfileEtudiant = () => {
           {/* Courses Information */}
           <div style={styles.infoCard}>
             <div style={styles.cardHeader}>
-              <BookOpen size={20} color="#059669" />
-              <h3 style={styles.cardTitle}>Mes Cours</h3>
+              <BookOpen size={20} color="#dc2626" />
+              <h3 style={styles.cardTitle}>Mes Classe</h3>
             </div>
             <div style={styles.cardContent}>
               {etudiant.cours && etudiant.cours.length > 0 ? (
@@ -181,7 +246,7 @@ const ProfileEtudiant = () => {
                   {etudiant.cours.map((cours, index) => (
                     <div key={index} style={styles.courseItem}>
                       <div style={styles.courseIcon}>
-                        <BookOpen size={16} color="#059669" />
+                        <BookOpen size={16} color="#dc2626" />
                       </div>
                       <span style={styles.courseName}>{cours}</span>
                     </div>
@@ -190,14 +255,112 @@ const ProfileEtudiant = () => {
               ) : (
                 <div style={styles.noCourses}>
                   <BookOpen size={32} color="#d1d5db" />
-                  <p style={styles.noCoursesText}>Aucun cours inscrit</p>
+                  <p style={styles.noCoursesText}>Aucun classe inscrit</p>
                 </div>
               )}
             </div>
           </div>
+
+          {/* Account Information */}
+          <div style={styles.infoCard}>
+            <div style={styles.cardHeader}>
+              <CheckCircle size={20} color="#7c3aed" />
+              <h3 style={styles.cardTitle}>Informations du Compte</h3>
+            </div>
+            <div style={styles.cardContent}>
+              <div style={styles.infoItem}>
+                <Calendar size={18} color="#6b7280" />
+                <div style={styles.infoDetails}>
+                  <span style={styles.infoLabel}>Créé le</span>
+                  <span style={styles.infoValue}>
+                    {etudiant.createdAt ? formatDate(etudiant.createdAt) : 'Non disponible'}
+                  </span>
+                </div>
+              </div>
+              {etudiant.lastSeen && (
+                <div style={styles.infoItem}>
+                  <CheckCircle size={18} color="#6b7280" />
+                  <div style={styles.infoDetails}>
+                    <span style={styles.infoLabel}>Dernière connexion</span>
+                    <span style={styles.infoValue}>{formatDate(etudiant.lastSeen)}</span>
+                  </div>
+                </div>
+              )}
+              <div style={styles.infoItem}>
+                <User size={18} color="#6b7280" />
+                <div style={styles.infoDetails}>
+                  <span style={styles.infoLabel}>Statut du compte</span>
+                  <span style={{
+                    ...styles.infoValue,
+                    color: etudiant.actif ? '#059669' : '#dc2626',
+                    fontWeight: '600'
+                  }}>
+                    {etudiant.actif ? 'Actif' : 'Inactif'}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Informations financières */}
+          <div style={styles.infoCard}>
+            <div style={styles.cardHeader}>
+              <DollarSign size={20} color="#059669" />
+              <h3 style={styles.cardTitle}>Informations financières</h3>
+            </div>
+            <div style={styles.cardContent}>
+              <div style={styles.infoItem}>
+                <DollarSign size={18} color="#059669" />
+                <div style={styles.infoDetails}>
+                  <span style={styles.infoLabel}>Prix total</span>
+                  <span style={styles.infoValue}>{etudiant.prixTotal ?? 0} Dh</span>
+                </div>
+              </div>
+              <div style={styles.infoItem}>
+                <Percent size={18} color="#f59e0b" />
+                <div style={styles.infoDetails}>
+                  <span style={styles.infoLabel}>Bourse</span>
+                  <span style={styles.infoValue}>
+                    {etudiant.pourcentageBourse ?? 0}%
+                    {etudiant.pourcentageBourse > 0 && (
+                      <span> (Réduction: {((etudiant.prixTotal ?? 0) * (etudiant.pourcentageBourse ?? 0) / 100).toFixed(2)} Dh)</span>
+                    )}
+                  </span>
+                </div>
+              </div>
+              <div style={styles.infoItem}>
+                <Receipt size={18} color="#3b82f6" />
+                <div style={styles.infoDetails}>
+                  <span style={styles.infoLabel}>Montant à payer</span>
+                  <span style={styles.infoValue}>{getMontantAPayer()} Dh</span>
+                </div>
+              </div>
+              <div style={styles.infoItem}>
+                <CreditCard size={18} color="#8b5cf6" />
+                <div style={styles.infoDetails}>
+                  <span style={styles.infoLabel}>Type paiement</span>
+                  <span style={styles.infoValue}>{etudiant.typePaiement || 'Cash'}</span>
+                </div>
+              </div>
+              <div style={styles.infoItem}>
+                <Calendar size={18} color="#10b981" />
+                <div style={styles.infoDetails}>
+                  <span style={styles.infoLabel}>Année scolaire</span>
+                  <span style={styles.infoValue}>{etudiant.anneeScolaire || 'N/A'}</span>
+                </div>
+              </div>
+              <div style={styles.infoItem}>
+                <CheckCircle size={18} color="#059669" />
+                <div style={styles.infoDetails}>
+                  <span style={styles.infoLabel}>Statut paiement</span>
+                  <span style={styles.infoValue}>
+                    {etudiant.paye ? 'Payé' : (etudiant.prixTotal === 0 ? 'Gratuit' : 'En attente')}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
-
-
       </div>
     </div>
   );
@@ -231,21 +394,6 @@ const styles = {
     fontWeight: '700',
     color: '#1f2937',
     margin: 0,
-  },
-  
-  editButton: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '0.5rem',
-    padding: '0.5rem 1rem',
-    backgroundColor: '#4f46e5',
-    color: 'white',
-    border: 'none',
-    borderRadius: '0.5rem',
-    cursor: 'pointer',
-    fontSize: '0.875rem',
-    fontWeight: '500',
-    transition: 'all 0.2s',
   },
   
   mainContent: {
@@ -335,7 +483,7 @@ const styles = {
   
   cardsGrid: {
     display: 'grid',
-    gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
+    gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))',
     gap: '1.5rem',
   },
   
@@ -405,9 +553,9 @@ const styles = {
     alignItems: 'center',
     gap: '0.75rem',
     padding: '0.75rem',
-    backgroundColor: '#f0fdf4',
+    backgroundColor: '#fef2f2',
     borderRadius: '0.5rem',
-    border: '1px solid #dcfce7',
+    border: '1px solid #fecaca',
   },
   
   courseIcon: {
@@ -422,7 +570,7 @@ const styles = {
   courseName: {
     fontSize: '0.875rem',
     fontWeight: '500',
-    color: '#065f46',
+    color: '#991b1b',
   },
   
   noCourses: {
@@ -438,43 +586,6 @@ const styles = {
     fontSize: '0.875rem',
     color: '#6b7280',
     margin: 0,
-  },
-  
-  actionsCard: {
-    backgroundColor: '#ffffff',
-    borderRadius: '1rem',
-    padding: '1.5rem',
-    boxShadow: '0 2px 4px rgba(0, 0, 0, 0.05)',
-    border: '1px solid #f3f4f6',
-  },
-  
-  actionsTitle: {
-    fontSize: '1.125rem',
-    fontWeight: '600',
-    color: '#1f2937',
-    margin: '0 0 1rem 0',
-  },
-  
-  actionsGrid: {
-    display: 'grid',
-    gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))',
-    gap: '1rem',
-  },
-  
-  actionButton: {
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'center',
-    gap: '0.5rem',
-    padding: '1rem',
-    backgroundColor: '#f8fafc',
-    border: '1px solid #e5e7eb',
-    borderRadius: '0.75rem',
-    cursor: 'pointer',
-    transition: 'all 0.2s',
-    fontSize: '0.875rem',
-    fontWeight: '500',
-    color: '#4b5563',
   },
   
   loadingContainer: {
@@ -525,11 +636,6 @@ styleSheet.textContent = `
     100% { transform: rotate(360deg); }
   }
   
-  button:hover {
-    transform: translateY(-1px);
-    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
-  }
-  
   @media (max-width: 768px) {
     .profile-header {
       flex-direction: column;
@@ -537,16 +643,6 @@ styleSheet.textContent = `
     }
     
     .cards-grid {
-      grid-template-columns: 1fr;
-    }
-    
-    .actions-grid {
-      grid-template-columns: repeat(2, 1fr);
-    }
-  }
-  
-  @media (max-width: 480px) {
-    .actions-grid {
       grid-template-columns: 1fr;
     }
   }

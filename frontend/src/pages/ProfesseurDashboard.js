@@ -62,9 +62,9 @@ const navigate = useNavigate();
       const headers = { Authorization: `Bearer ${token}` };
 
       const [resEt, resCours, resPre] = await Promise.all([
-        fetch('http://localhost:5000/api/professeur/etudiants', { headers }),
-        fetch('http://localhost:5000/api/professeur/mes-cours', { headers }),
-        fetch('http://localhost:5000/api/professeur/presences', { headers })
+        fetch('http://195.179.229.230:5004/api/professeur/etudiants', { headers }),
+        fetch('http://195.179.229.230:5004/api/professeur/mes-cours', { headers }),
+        fetch('http://195.179.229.230:5004/api/professeur/presences', { headers })
       ]);
 
       if (resEt.ok) {
@@ -94,7 +94,7 @@ useEffect(() => {
   const fetchProf = async () => {
     try {
       const token = localStorage.getItem('token');
-      const res = await fetch('http://localhost:5000/api/professeur/profile', {
+      const res = await fetch('http://195.179.229.230:5004/api/professeur/profile', {
         headers: { Authorization: `Bearer ${token}` }
       });
 
@@ -368,7 +368,7 @@ useEffect(() => {
               subtitle="Sous ma responsabilité"
             />
             <StatCard
-              title="Cours Actifs"
+              title="Classe Actifs"
               value={totalCours}
               icon={BookOpen}
               colorClass="green"
@@ -458,12 +458,12 @@ useEffect(() => {
             </h3>
             <div className="summary-grid">
               <div className="summary-item blue">
-                <p className="summary-item-label">Étudiants par Cours</p>
+                <p className="summary-item-label">Étudiants par classe</p>
                 <p className="summary-item-value">
                   {totalCours ? Math.round(totalEtudiants / totalCours) : 0}
                 </p>
                 <p className="summary-item-detail">
-                  {totalEtudiants} étudiants / {totalCours} cours
+                  {totalEtudiants} étudiants / {totalCours} classe
                 </p>
               </div>
               <div className="summary-item green">

@@ -47,7 +47,7 @@ const ListePresences = () => {
           return;
         }
 
-        const res = await axios.get('http://localhost:5000/api/professeur/presences', {
+        const res = await axios.get('http://195.179.229.230:5004/api/professeur/presences', {
           headers: { Authorization: `Bearer ${token}` }
         });
 
@@ -413,8 +413,8 @@ const ListePresences = () => {
     },
     modalBody: {
       padding: '24px',
-      maxHeight: 'calc(90vh - 120px)',
-      overflowY: 'auto'
+      overflowY: 'auto',
+      maxHeight: 'calc(90vh - 120px)'
     },
     statsGrid: {
       display: 'grid',
@@ -593,7 +593,7 @@ const ListePresences = () => {
               <Search size={20} style={styles.searchIcon} />
               <input
                 type="text"
-                placeholder="Rechercher par cours, date, heure, période..."
+                placeholder="Rechercher par classe, date, heure, période..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 style={styles.searchInput}
@@ -646,14 +646,14 @@ const ListePresences = () => {
                   </div>
 
                   <div style={styles.filterGroup}>
-                    <label style={styles.filterLabel}>Cours</label>
+                    <label style={styles.filterLabel}>Classe</label>
                     <select
                       value={coursFilter}
                       onChange={(e) => setCoursFilter(e.target.value)}
                       style={styles.filterSelect}
                       className="filter-select"
                     >
-                      <option value="">Tous les cours</option>
+                      <option value="">Tous les classes</option>
                       {availableCours.map(cours => (
                         <option key={cours} value={cours}>{cours}</option>
                       ))}
@@ -767,7 +767,7 @@ const ListePresences = () => {
           <div style={styles.card}>
             <div style={{ padding: '24px 24px 0 24px', borderBottom: '1px solid #e5e7eb' }}>
               <h2 style={{ fontSize: '18px', fontWeight: '600', color: '#111827', margin: '0 0 16px 0' }}>
-                Sessions de cours
+                Sessions de classe
               </h2>
             </div>
             
@@ -785,7 +785,7 @@ const ListePresences = () => {
                     <th style={styles.th}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                         <Book size={16} />
-                        Cours
+                        Classe
                       </div>
                     </th>
                     <th style={styles.th}>
@@ -948,7 +948,7 @@ const ListePresences = () => {
         {/* Modal Détails */}
         {sessionActive && (
           <div style={styles.modal}>
-            <div style={styles.modalContent}>
+            <div style={{ ...styles.modalContent, overflowY: 'auto', maxHeight: '90vh' }}>
               {/* Modal Header */}
               <div style={styles.modalHeader}>
                 <div>
@@ -994,7 +994,7 @@ const ListePresences = () => {
               </div>
 
               {/* Modal Content */}
-              <div style={styles.modalBody}>
+              <div style={{ ...styles.modalBody, overflowY: 'auto', maxHeight: 'calc(90vh - 120px)' }}>
                 {/* Statistics Cards */}
                 <div style={styles.statsGrid}>
                   <div style={{ ...styles.statCard, ...styles.statCardGreen }}>

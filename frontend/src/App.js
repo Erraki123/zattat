@@ -36,8 +36,10 @@ import LiveCoursEtudiant from './pages/LiveCoursEtudiant';
 import ProfLiveCours from './pages/ProfLiveCours';
 import ProfileProfesseur from './pages/ProfileProfesseur';
 import QREtudiant from './pages/qretudiant';
-import QrWeekPlanningAdmin from './pages/QrWeekPlanningAdmin';
-
+import Dashboardmanager from './pages/Dashboardmanager';
+import  ProfAjouterBulletin from './pages/ProfAjouterBulletin'; 
+import  AdminBulletins from './pages/AdminBulletins'; 
+import  EtudiantBulletins from './pages/EtudiantBulletins';
 import MessageProf from './pages/MessageProf';
 import MessageEtudiant from './pages/MessageEtudiant';
 import ProfileUpdatePage from './pages/ProfileUpdatePage';
@@ -59,6 +61,12 @@ import CollegePage from './pages/CollegePage'; // Import de la page
 import LyceePage
  from './pages/LyceePage'; // Import de la page
 import AdminActualites from './pages/AdminActualites';
+import PaiementManagerPage from './pages/PaiementManagerPage';
+import AdminMessagesmanager from './pages/AdminMessagesmanager';
+import AdminVieScolairemanager from './pages/AdminVieScolairemanager';
+import AdminActualitesmanager from './pages/AdminActualitesmanager';
+import EtudiantProfil from './pages/EtudiantProfil';
+import ProfesseurProfil from './pages/ProfesseurProfil';
 
 
 function AppContent() {
@@ -120,6 +128,7 @@ function AppContent() {
         <Route path="/lycee" element={<LyceePage/>} />
 
 <Route path="/admin/actualites" element={<AdminActualites />} />
+<Route path="/manager/actualites" element={<AdminActualitesmanager />} />
 
 
 
@@ -128,7 +137,7 @@ function AppContent() {
         <Route path="/liste-etudiants" element={<ListeEtudiants />} />
         <Route path="/ajouter-paiement" element={<AjouterPaiement />} />
         <Route path="/liste-paiements" element={<ListePaiements />} />
-        <Route path="/liste-cours" element={<ListeCours />} />
+        <Route path="/liste-classe" element={<ListeCours />} />
         <Route path="/calendrier" element={<Calendrier />} />
         <Route path="/etudiants/:id" element={<ProfilEtudiant />} />
         <Route path="/ajouter-professeur" element={<AjouterProfesseur />} />
@@ -141,8 +150,17 @@ function AppContent() {
 <Route path="/admin/seances" element={<AdminAjouterSeance />} />
 <Route path="/etudiant/seances" element={<SeancesEtudiant />} />
 <Route path="/professeur/seances" element={<SeancesProfesseur />} />
+<Route path="/admin/Bulletin" element={< AdminBulletins />} />
 
-<Route path="/admin/qr-planning" element={<QrWeekPlanningAdmin />} />
+<Route path="/manager/messages" element={< AdminMessagesmanager />} />
+
+<Route path="/etudiant/Bulletin" element={< EtudiantBulletins />} /><Route path="/professeur/AjouterBulletin" element={<ProfAjouterBulletin />} />
+
+
+<Route path="/manager/VieScolaire" element={<AdminVieScolairemanager />} />
+
+<Route path="/manager" element={<Dashboardmanager />} />
+<Route path="/admin/Manager" element={< PaiementManagerPage />} />
 
         {/* Routes Professeur */}
         <Route path="/professeur" element={<ProfesseurDashboard />} />
@@ -164,6 +182,9 @@ function AppContent() {
         {/* Routes Étudiant */}
         <Route path="/etudiant/messages" element={<MessageEtudiant />} />
 
+
+<Route path="/professeur/profil" element={<ProfesseurProfil />} />
+<Route path="/etudiant/profil" element={<EtudiantProfil />} />
         <Route path="/etudiant" element={<DashboardEtudiant />} />
         <Route path="/etudiant/profile" element={<Profile />} />
         <Route path="/etudiant/presences" element={<EtudiantPresences />} />

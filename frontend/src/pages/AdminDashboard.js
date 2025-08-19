@@ -60,7 +60,7 @@ const [editNote, setEditNote] = useState('');
         'Content-Type': 'application/json'
       };
 
-      const res = await fetch('http://localhost:5000/api/rappels', { headers });
+      const res = await fetch('http://195.179.229.230:5004/api/rappels', { headers });
       if (!res.ok) throw new Error('Erreur lors du chargement des rappels');
 
       const data = await res.json();
@@ -89,7 +89,7 @@ new Date(r.dateRappel).toDateString() <= today.toDateString()
 }, []);
 
 const handleUpdateRappel = async (id) => {
-  const res = await fetch(`http://localhost:5000/api/rappels/${id}`, {
+  const res = await fetch(`http://195.179.229.230:5004/api/rappels/${id}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ dateRappel: editDate, note: editNote })
@@ -101,7 +101,7 @@ const handleUpdateRappel = async (id) => {
 };
 
 const handleDeleteRappel = async (id) => {
-  const res = await fetch(`http://localhost:5000/api/rappels/${id}`, {
+  const res = await fetch(`http://195.179.229.230:5004/api/rappels/${id}`, {
     method: 'DELETE'
   });
 
@@ -129,13 +129,13 @@ const handleDeleteRappel = async (id) => {
 
       // Récupération parallèle des données - ✅ إضافة الأساتذة
       const [adminRes, etudiantsRes, coursRes, paiementsRes, evenementsRes, presencesRes, professeursRes] = await Promise.all([
-        fetch('http://localhost:5000/api/admin/dashboard', { headers }),
-        fetch('http://localhost:5000/api/etudiants', { headers }),
-        fetch('http://localhost:5000/api/cours', { headers }),
-        fetch('http://localhost:5000/api/paiements', { headers }),
-        fetch('http://localhost:5000/api/evenements', { headers }),
-        fetch('http://localhost:5000/api/presences', { headers }),
-        fetch('http://localhost:5000/api/professeurs', { headers }) // ✅ جديد
+        fetch('http://195.179.229.230:5004/api/admin/dashboard', { headers }),
+        fetch('http://195.179.229.230:5004/api/etudiants', { headers }),
+        fetch('http://195.179.229.230:5004/api/cours', { headers }),
+        fetch('http://195.179.229.230:5004/api/paiements', { headers }),
+        fetch('http://195.179.229.230:5004/api/evenements', { headers }),
+        fetch('http://195.179.229.230:5004/api/presences', { headers }),
+        fetch('http://195.179.229.230:5004/api/professeurs', { headers }) // ✅ جديد
       ]);
 
       // Vérification des statuts de réponse
@@ -190,7 +190,7 @@ const handleDeleteRappel = async (id) => {
       // Récupération des paiements expirés
       let paiementsExpiresCount = 0;
       try {
-        const paiementsExpRes = await fetch('http://localhost:5000/api/paiements/exp', { headers });
+        const paiementsExpRes = await fetch('http://195.179.229.230:5004/api/paiements/exp', { headers });
         if (paiementsExpRes.ok) {
           const paiementsExpires = await paiementsExpRes.json();
           paiementsExpiresCount = Array.isArray(paiementsExpires) ? paiementsExpires.length : 0;
@@ -394,7 +394,7 @@ const handleDeleteRappel = async (id) => {
               subtitle="En cours de formation"
             />
             <StatCard
-              title="Total Cours"
+              title="Total Classe"
               value={dashboardData.totalCours}
               icon={GraduationCap}
               colorClass="purple"
@@ -448,7 +448,7 @@ const handleDeleteRappel = async (id) => {
             <div className="chart-card">
               <div className="chart-header">
                 <GraduationCap />
-                <h3>Étudiants par Cours (Données Réelles)</h3>
+                <h3>Étudiants par classe (Données Réelles)</h3>
               </div>
               {chartData.coursStats && chartData.coursStats.length > 0 ? (
                 <ResponsiveContainer width="100%" height={300}>
@@ -475,8 +475,8 @@ const handleDeleteRappel = async (id) => {
                 <div className="chart-empty">
                   <GraduationCap />
                   <div>
-                    <h4>Aucun cours avec étudiants inscrits</h4>
-                    <p>Ajoutez des cours et des étudiants</p>
+                    <h4>Aucun Classe avec étudiants inscrits</h4>
+                    <p>Ajoutez des Classe et des étudiants</p>
                   </div>
                 </div>
               )}
@@ -615,7 +615,7 @@ const handleDeleteRappel = async (id) => {
                 </p>
               </div>
               <div className="summary-item green">
-                <p className="summary-item-label">Moyenne Étudiants/Cours</p>
+                <p className="summary-item-label">Moyenne Étudiants/classe</p>
                 <p className="summary-item-value">
                   {dashboardData.totalCours ? Math.round(dashboardData.totalEtudiants / dashboardData.totalCours) : 0}
                 </p>

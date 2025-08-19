@@ -61,7 +61,7 @@ const EmploiDuTemps = () => {
         let coursData = []; // ✅ Declare coursData at the beginning
         
         // Récupérer les cours depuis votre API
-        const resCours = await fetch('http://localhost:5000/api/cours', {
+        const resCours = await fetch('http://195.179.229.230:5004/api/cours', {
           headers: { Authorization: `Bearer ${token}` }
         });
         if (resCours.ok) {
@@ -70,7 +70,7 @@ const EmploiDuTemps = () => {
         }
 
         // Récupérer les professeurs depuis votre API
-        const resProfs = await fetch('http://localhost:5000/api/professeurs', {
+        const resProfs = await fetch('http://195.179.229.230:5004/api/professeurs', {
           headers: { Authorization: `Bearer ${token}` }
         });
         if (resProfs.ok) {
@@ -79,7 +79,7 @@ const EmploiDuTemps = () => {
         }
 
         // Récupérer les séances existantes depuis votre API
-        const resSeances = await fetch('http://localhost:5000/api/seances', {
+        const resSeances = await fetch('http://195.179.229.230:5004/api/seances', {
           headers: { Authorization: `Bearer ${token}` }
         });
         if (resSeances.ok) {
@@ -193,7 +193,7 @@ const EmploiDuTemps = () => {
           let res;
           if (seanceData.seanceId) {
             // Modifier séance existante
-            res = await fetch(`http://localhost:5000/api/seances/${seanceData.seanceId}`, {
+            res = await fetch(`http://195.179.229.230:5004/api/seances/${seanceData.seanceId}`, {
               method: 'PUT',
               headers: {
                 'Content-Type': 'application/json',
@@ -203,7 +203,7 @@ const EmploiDuTemps = () => {
             });
           } else {
             // Créer nouvelle séance
-            res = await fetch('http://localhost:5000/api/seances', {
+            res = await fetch('http://195.179.229.230:5004/api/seances', {
               method: 'POST',
               headers: {
                 'Content-Type': 'application/json',
@@ -555,7 +555,7 @@ const EmploiDuTemps = () => {
         <div style={styles.coursSelection}>
           <h3 style={{ margin: '0 0 10px 0', color: '#374151' }}>
             <Book size={20} style={{ verticalAlign: 'middle', marginRight: '8px' }} />
-            Sélectionnez les cours à afficher:
+            Sélectionnez les classe à afficher:
           </h3>
           <div style={styles.coursGrid}>
             {coursList.map(cours => (
@@ -728,7 +728,7 @@ const EmploiDuTemps = () => {
 
       {selectedCours.length === 0 && (
         <div style={{ textAlign: 'center', padding: '40px', color: '#6b7280' }}>
-          Sélectionnez au moins un cours pour afficher son emploi du temps
+          Sélectionnez au moins un classe pour afficher son emploi du temps
         </div>
       )}
     </div>

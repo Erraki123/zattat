@@ -42,7 +42,7 @@ const EtudiantsProfesseur = () => {
     try {
       setLoading(true);
       const token = localStorage.getItem('token');
-      const res = await axios.get('http://localhost:5000/api/professeur/etudiants', {
+      const res = await axios.get('http://195.179.229.230:5004/api/professeur/etudiants', {
         headers: { Authorization: `Bearer ${token}` }
       });
       setEtudiants(res.data);
@@ -96,7 +96,7 @@ const EtudiantsProfesseur = () => {
       const config = {
         headers: { Authorization: `Bearer ${token}` }
       };
-      const resEtudiant = await axios.get(`http://localhost:5000/api/etudiants/${etudiant._id}`, config);
+      const resEtudiant = await axios.get(`http://195.179.229.230:5004/api/etudiants/${etudiant._id}`, config);
       setEtudiantSelectionne(resEtudiant.data);
       setShowViewModal(true);
     } catch (err) {
@@ -215,13 +215,13 @@ const EtudiantsProfesseur = () => {
           </div>
 
           <div className="filtre-groupe">
-            <label>Cours:</label>
+            <label>Classe:</label>
             <select
               value={filtreCours}
               onChange={(e) => setFiltreCours(e.target.value)}
               className="select-filtre"
             >
-              <option value="">Tous les cours</option>
+              <option value="">Tous les classe</option>
               {coursUniques.map(cours => (
                 <option key={cours} value={cours}>{cours}</option>
               ))}
@@ -260,7 +260,7 @@ const EtudiantsProfesseur = () => {
                 <th>Âge</th>
                 <th>Téléphone</th>
                 <th>Email</th>
-                <th>Cours</th>
+                <th>Classe</th>
                 <th>Statut</th>
                 <th>Image</th>
                 <th>Actions</th>
@@ -293,7 +293,7 @@ const EtudiantsProfesseur = () => {
                     <td className="image-colonne">
                       {e.image ? (
                         <img 
-                          src={`http://localhost:5000${e.image}`} 
+                          src={`http://195.179.229.230:5004${e.image}`} 
                           alt="etudiant" 
                           className="image-etudiant"
                         />
@@ -330,7 +330,7 @@ const EtudiantsProfesseur = () => {
                     <div className="carte-image">
                       {e.image ? (
                         <img 
-                          src={`http://localhost:5000${e.image}`} 
+                          src={`http://195.179.229.230:5004${e.image}`} 
                           alt="etudiant" 
                           className="carte-photo"
                         />
@@ -371,14 +371,14 @@ const EtudiantsProfesseur = () => {
                         <span>{e.email || 'N/A'}</span>
                       </div>
                       <div className="carte-detail cours-detail">
-                        <span className="carte-label">Cours:</span>
+                        <span className="carte-label">Classe:</span>
                         <div className="carte-cours">
                           {(e.cours || []).length > 0 ? (
                             e.cours.map((cours, index) => (
                               <span key={index} className="cours-tag">{cours}</span>
                             ))
                           ) : (
-                            <span className="no-cours">Aucun cours</span>
+                            <span className="no-cours">Aucun classe</span>
                           )}
                         </div>
                       </div>
@@ -455,7 +455,7 @@ const EtudiantsProfesseur = () => {
                 <div className="etudiant-image-section">
                   {etudiantSelectionne.image ? (
                     <img 
-                      src={`http://localhost:5000${etudiantSelectionne.image}`} 
+                      src={`http://195.179.229.230:5004${etudiantSelectionne.image}`} 
                       alt="Photo de l'étudiant" 
                       className="etudiant-image-large"
                     />
@@ -522,7 +522,7 @@ const EtudiantsProfesseur = () => {
 
               <div className="cours-section">
                 <h4>
-                  <BookOpen size={20} className="inline mr-2" /> Cours Inscrits
+                  <BookOpen size={20} className="inline mr-2" /> Classe Inscrits
                 </h4>
                 <div className="cours-badges">
                   {(etudiantSelectionne.cours || []).length > 0 ? (
@@ -530,7 +530,7 @@ const EtudiantsProfesseur = () => {
                       <span key={index} className="cours-badge">{cours}</span>
                     ))
                   ) : (
-                    <span className="no-cours">Aucun cours inscrit</span>
+                    <span className="no-cours">Aucun classe inscrit</span>
                   )}
                 </div>
               </div>

@@ -14,17 +14,22 @@ import {
   FileText,
   Filter,
   Eye,
-  EyeOff
+  EyeOff,
+  Mail,
+  MapPin,
+  Hash,
+  UserCheck,
+  Percent,
+  Receipt
 } from 'lucide-react';
 import axios from 'axios';
 import { useParams } from 'react-router-dom';
 import Sidebar from '../components/Sidebar';
 
-const handleLogout = () => {
-  localStorage.removeItem('token');
-  window.location.href = '/';
-};
-
+ const handleLogout = () => {
+    localStorage.removeItem('token');
+    window.location.href = '/';
+  };
 const ProfilEtudiant = () => {
   const { id } = useParams();
   
@@ -34,8 +39,8 @@ const ProfilEtudiant = () => {
   const [presences, setPresences] = useState([]);
   const [loading, setLoading] = useState(true);
   
-  // ✅ Nouveaux états pour les filtres de présence
-  const [presenceFilter, setPresenceFilter] = useState('all'); // 'all', 'present', 'absent'
+  // États pour les filtres de présence
+  const [presenceFilter, setPresenceFilter] = useState('all');
   const [showPresenceStats, setShowPresenceStats] = useState(true);
 
   useEffect(() => {
@@ -45,21 +50,20 @@ const ProfilEtudiant = () => {
         const config = { headers: { Authorization: `Bearer ${token}` } };
 
         // Récupération des données de l'étudiant
-        const resEtudiant = await axios.get(`http://localhost:5000/api/etudiants/${id}`, config);
+        const resEtudiant = await axios.get(`http://195.179.229.230:5004/api/etudiants/${id}`, config);
         setEtudiant(resEtudiant.data);
 
-        // Récupération de tous les paiements puis filtrage
-        const resPaiements = await axios.get(`http://localhost:5000/api/paiements`, config);
-        const paiementsEtudiant = resPaiements.data.filter(p => p.etudiant?._id === id);
-        setPaiements(paiementsEtudiant);
+        // Récupération des paiements spécifiques à cet étudiant (OPTIMISÉ)
+        const resPaiements = await axios.get(`http://195.179.229.230:5004/api/paiements/etudiant/${id}`, config);
+        setPaiements(resPaiements.data);
 
         // Récupération des paiements expirés puis filtrage
-        const resExp = await axios.get(`http://localhost:5000/api/paiements/exp`, config);
+        const resExp = await axios.get(`http://195.179.229.230:5004/api/paiements/exp`, config);
         const expirésEtudiant = resExp.data.filter(p => p.etudiant?._id === id);
         setExpirés(expirésEtudiant);
 
         // Récupération des présences pour cet étudiant
-        const resPres = await axios.get(`http://localhost:5000/api/presences/etudiant/${id}`, config);
+        const resPres = await axios.get(`http://195.179.229.230:5004/api/presences/etudiant/${id}`, config);
         setPresences(resPres.data);
       } catch (error) {
         console.error('Erreur lors du chargement des données:', error);
@@ -72,7 +76,7 @@ const ProfilEtudiant = () => {
     fetchData();
   }, [id]);
 
-  // ✅ Fonction pour calculer les statistiques de présence
+  // Fonction pour calculer les statistiques de présence
   const getPresenceStats = () => {
     const total = presences.length;
     const present = presences.filter(p => p.present).length;
@@ -82,7 +86,7 @@ const ProfilEtudiant = () => {
     return { total, present, absent, tauxPresence };
   };
 
-  // ✅ Fonction pour filtrer les présences
+  // Fonction pour filtrer les présences
   const getFilteredPresences = () => {
     switch (presenceFilter) {
       case 'present':
@@ -92,6 +96,29 @@ const ProfilEtudiant = () => {
       default:
         return presences;
     }
+  };
+
+  // Fonction pour calculer le montant à payer après bourse
+  const getMontantAPayer = () => {
+    if (!etudiant || !etudiant.prixTotal) return 0;
+    const reduction = (etudiant.prixTotal * (etudiant.pourcentageBourse || 0)) / 100;
+    return etudiant.prixTotal - reduction;
+  };
+
+  // Fonction pour obtenir le statut de paiement
+  const getStatutPaiement = () => {
+    if (!etudiant) return 'Inconnu';
+    if (etudiant.paye) return 'Payé';
+    if (etudiant.prixTotal === 0) return 'Gratuit';
+    return 'En attente';
+  };
+
+  // Ajout des calculs de paiement total et déjà payé
+  const getPaiementStats = () => {
+    const totalPaye = paiements.reduce((acc, p) => acc + (p.montant || 0), 0);
+    const prixTotal = etudiant?.prixTotal || 0;
+    const reste = Math.max(0, prixTotal - totalPaye);
+    return { prixTotal, totalPaye, reste };
   };
 
   if (loading) {
@@ -117,19 +144,21 @@ const ProfilEtudiant = () => {
 
   const filteredPresences = getFilteredPresences();
   const stats = getPresenceStats();
+  const montantAPayer = getMontantAPayer();
+  const statutPaiement = getStatutPaiement();
+  const paiementStats = getPaiementStats();
 
   return (
     <div style={styles.pageContainer}>
-      <Sidebar onLogout={handleLogout} />
-
-      {/* Header avec informations principales */}
+      {/* Header avec informations principales */}      <Sidebar onLogout={handleLogout} />
+      
       <div style={styles.headerSection}>
         <div style={styles.headerContent}>
           <div style={styles.profileHeader}>
             <div style={styles.avatarSection}>
               {etudiant.image ? (
                 <img
-                  src={`http://localhost:5000${etudiant.image}`}
+                  src={`http://195.179.229.230:5004${etudiant.image}`}
                   alt="Profil étudiant"
                   style={styles.avatar}
                 />
@@ -149,7 +178,16 @@ const ProfilEtudiant = () => {
             <div style={styles.studentInfo}>
               <h1 style={styles.studentName}>{etudiant.nomComplet}</h1>
               
+              {/* Informations personnelles de base */}
               <div style={styles.infoCards}>
+                <div style={styles.infoCard}>
+                  <User size={18} color="#8b5cf6" />
+                  <div>
+                    <span style={styles.infoLabel}>Genre</span>
+                    <span style={styles.infoValue}>{etudiant.genre}</span>
+                  </div>
+                </div>
+
                 <div style={styles.infoCard}>
                   <Calendar size={18} color="#6366f1" />
                   <div>
@@ -161,23 +199,93 @@ const ProfilEtudiant = () => {
                 </div>
 
                 <div style={styles.infoCard}>
-                  <Phone size={18} color="#06b6d4" />
+                  <Mail size={18} color="#06b6d4" />
                   <div>
-                    <span style={styles.infoLabel}>Téléphone</span>
-                    <span style={styles.infoValue}>{etudiant.telephone}</span>
+                    <span style={styles.infoLabel}>Email</span>
+                    <span style={styles.infoValue}>{etudiant.email}</span>
                   </div>
                 </div>
 
                 <div style={styles.infoCard}>
-                  <BookOpen size={18} color="#f59e0b" />
+                  <Hash size={18} color="#f59e0b" />
                   <div>
-                    <span style={styles.infoLabel}>Cours inscrits</span>
-                    <div style={styles.coursesGrid}>
-                      {etudiant.cours?.map((cours, index) => (
-                        <span key={index} style={styles.courseTag}>{cours}</span>
-                      ))}
+                    <span style={styles.infoLabel}>Code Massar</span>
+                    <span style={styles.infoValue}>{etudiant.codeMassar}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Informations de contact */}
+              <div style={styles.contactSection}>
+                <h3 style={styles.sectionSubtitle}>Contacts</h3>
+                <div style={styles.infoCards}>
+                  <div style={styles.infoCard}>
+                    <Phone size={18} color="#10b981" />
+                    <div>
+                      <span style={styles.infoLabel}>Téléphone étudiant</span>
+                      <span style={styles.infoValue}>{etudiant.telephoneEtudiant}</span>
                     </div>
                   </div>
+
+                  {etudiant.telephonePere && (
+                    <div style={styles.infoCard}>
+                      <Phone size={18} color="#3b82f6" />
+                      <div>
+                        <span style={styles.infoLabel}>Téléphone père</span>
+                        <span style={styles.infoValue}>{etudiant.telephonePere}</span>
+                      </div>
+                    </div>
+                  )}
+
+                  {etudiant.telephoneMere && (
+                    <div style={styles.infoCard}>
+                      <Phone size={18} color="#ec4899" />
+                      <div>
+                        <span style={styles.infoLabel}>Téléphone mère</span>
+                        <span style={styles.infoValue}>{etudiant.telephoneMere}</span>
+                      </div>
+                    </div>
+                  )}
+
+                  {etudiant.adresse && (
+                    <div style={styles.infoCard}>
+                      <MapPin size={18} color="#ef4444" />
+                      <div>
+                        <span style={styles.infoLabel}>Adresse</span>
+                        <span style={styles.infoValue}>{etudiant.adresse}</span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Informations académiques */}
+              <div style={styles.contactSection}>
+                <h3 style={styles.sectionSubtitle}>Informations académiques</h3>
+                <div style={styles.infoCards}>
+                  <div style={styles.infoCard}>
+                    <BookOpen size={18} color="#f59e0b" />
+                    <div>
+                      <span style={styles.infoLabel}>Cours inscrits</span>
+                      <div style={styles.coursesGrid}>
+                        {etudiant.cours?.map((cours, index) => (
+                          <span key={index} style={styles.courseTag}>{cours}</span>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+
+                  {etudiant.lastSeen && (
+                    <div style={styles.infoCard}>
+                      <UserCheck size={18} color="#059669" />
+                      <div>
+                        <span style={styles.infoLabel}>Dernière connexion</span>
+                        <span style={styles.infoValue}>
+                          {new Date(etudiant.lastSeen).toLocaleDateString('fr-FR')} à {new Date(etudiant.lastSeen).toLocaleTimeString('fr-FR')}
+                        </span>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
@@ -188,6 +296,98 @@ const ProfilEtudiant = () => {
       {/* Content principal */}
       <div style={styles.mainContent}>
         <div style={styles.contentWrapper}>
+          {/* Section Informations Financières */}
+          <div style={styles.section}>
+            <div style={styles.sectionHeader}>
+              <div style={styles.sectionTitle}>
+                <DollarSign size={24} color="#059669" />
+                <h2>Informations financières</h2>
+              </div>
+              <div style={{
+                ...styles.counter,
+                backgroundColor: statutPaiement === 'Payé' ? '#d1fae5' : statutPaiement === 'Gratuit' ? '#e0f2fe' : '#fef3c7',
+                color: statutPaiement === 'Payé' ? '#065f46' : statutPaiement === 'Gratuit' ? '#0369a1' : '#92400e'
+              }}>
+                {statutPaiement}
+              </div>
+            </div>
+
+            <div style={styles.sectionContent}>
+              <div style={styles.financialGrid}>
+                <div style={styles.financialCard}>
+                  <div style={styles.financialIcon}>
+                    <DollarSign size={20} color="#059669" />
+                  </div>
+                  <div style={styles.financialContent}>
+                    <span style={styles.financialLabel}>Prix total</span>
+                    <span style={styles.financialValue}>{paiementStats.prixTotal} DH</span>
+                  </div>
+                </div>
+                <div style={styles.financialCard}>
+                  <div style={styles.financialIcon}>
+                    <CheckCircle size={20} color="#10b981" />
+                  </div>
+                  <div style={styles.financialContent}>
+                    <span style={styles.financialLabel}>Déjà payé</span>
+                    <span style={styles.financialValue}>{paiementStats.totalPaye} DH</span>
+                  </div>
+                </div>
+                <div style={styles.financialCard}>
+                  <div style={styles.financialIcon}>
+                    <AlertTriangle size={20} color="#dc2626" />
+                  </div>
+                  <div style={styles.financialContent}>
+                    <span style={styles.financialLabel}>Reste à payer</span>
+                    <span style={styles.financialValue}>{paiementStats.reste} DH</span>
+                  </div>
+                </div>
+
+                {etudiant.pourcentageBourse > 0 && (
+                  <div style={styles.financialCard}>
+                    <div style={styles.financialIcon}>
+                      <Percent size={20} color="#f59e0b" />
+                    </div>
+                    <div style={styles.financialContent}>
+                      <span style={styles.financialLabel}>Bourse</span>
+                      <span style={styles.financialValue}>{etudiant.pourcentageBourse}%</span>
+                    </div>
+                  </div>
+                )}
+
+                <div style={styles.financialCard}>
+                  <div style={styles.financialIcon}>
+                    <Receipt size={20} color="#3b82f6" />
+                  </div>
+                  <div style={styles.financialContent}>
+                    <span style={styles.financialLabel}>Montant à payer</span>
+                    <span style={styles.financialValue}>{montantAPayer} DH</span>
+                  </div>
+                </div>
+
+                <div style={styles.financialCard}>
+                  <div style={styles.financialIcon}>
+                    <CreditCard size={20} color="#8b5cf6" />
+                  </div>
+                  <div style={styles.financialContent}>
+                    <span style={styles.financialLabel}>Type de paiement</span>
+                    <span style={styles.financialValue}>{etudiant.typePaiement || 'Cash'}</span>
+                  </div>
+                </div>
+
+                {etudiant.dateEtReglement && (
+                  <div style={styles.financialCard}>
+                    <div style={styles.financialIcon}>
+                      <Calendar size={20} color="#10b981" />
+                    </div>
+                    <div style={styles.financialContent}>
+                      <span style={styles.financialLabel}>Date de règlement</span>
+                      <span style={styles.financialValue}>{etudiant.dateEtReglement}</span>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
           
           {/* Section Paiements */}
           <div style={styles.section}>
@@ -313,7 +513,7 @@ const ProfilEtudiant = () => {
             </div>
           </div>
 
-          {/* ✅ Section Présences - UPDATED */}
+          {/* Section Présences */}
           <div style={styles.section}>
             <div style={styles.sectionHeader}>
               <div style={styles.sectionTitle}>
@@ -321,7 +521,6 @@ const ProfilEtudiant = () => {
                 <h2>Historique de présence</h2>
               </div>
               <div style={styles.presenceHeaderControls}>
-                {/* ✅ Bouton pour afficher/masquer les stats */}
                 <button
                   onClick={() => setShowPresenceStats(!showPresenceStats)}
                   style={styles.toggleStatsBtn}
@@ -330,7 +529,6 @@ const ProfilEtudiant = () => {
                   {showPresenceStats ? 'Masquer stats' : 'Voir stats'}
                 </button>
                 
-                {/* ✅ Filtre de présence */}
                 <div style={styles.filterContainer}>
                   <Filter size={16} color="#6b7280" />
                   <select
@@ -346,7 +544,7 @@ const ProfilEtudiant = () => {
               </div>
             </div>
 
-            {/* ✅ Statistiques de présence */}
+            {/* Statistiques de présence */}
             {showPresenceStats && presences.length > 0 && (
               <div style={styles.presenceStatsContainer}>
                 <div style={styles.statCard}>
@@ -608,9 +806,23 @@ const styles = {
     lineHeight: 1.2
   },
 
+  // Section pour grouper les informations
+  contactSection: {
+    marginTop: '24px'
+  },
+
+  sectionSubtitle: {
+    fontSize: '18px',
+    fontWeight: '600',
+    color: '#374151',
+    margin: '0 0 16px 0',
+    paddingBottom: '8px',
+    borderBottom: '2px solid #e5e7eb'
+  },
+
   infoCards: {
     display: 'grid',
-    gap: '20px',
+    gap: '16px',
     gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))'
   },
 
@@ -711,7 +923,58 @@ const styles = {
     padding: '0 8px'
   },
 
-  // ✅ Nouveaux styles pour les contrôles de présence
+  // Nouveaux styles pour les informations financières
+  financialGrid: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+    gap: '16px'
+  },
+
+  financialCard: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '12px',
+    padding: '20px',
+    backgroundColor: '#f8fafc',
+    borderRadius: '8px',
+    border: '1px solid #e2e8f0',
+    boxShadow: '0 1px 2px rgba(0, 0, 0, 0.05)'
+  },
+
+  financialIcon: {
+    flexShrink: 0,
+    width: '40px',
+    height: '40px',
+    borderRadius: '8px',
+    backgroundColor: '#ffffff',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    border: '1px solid #e5e7eb'
+  },
+
+  financialContent: {
+    display: 'flex',
+    flexDirection: 'column',
+    minWidth: 0
+  },
+
+  financialLabel: {
+    fontSize: '12px',
+    fontWeight: '500',
+    color: '#6b7280',
+    textTransform: 'uppercase',
+    letterSpacing: '0.5px',
+    marginBottom: '4px'
+  },
+
+  financialValue: {
+    fontSize: '16px',
+    fontWeight: '700',
+    color: '#111827'
+  },
+
+  // Contrôles de présence
   presenceHeaderControls: {
     display: 'flex',
     alignItems: 'center',
@@ -750,7 +1013,7 @@ const styles = {
     cursor: 'pointer'
   },
 
-  // ✅ Styles pour les statistiques
+  // Statistiques de présence
   presenceStatsContainer: {
     display: 'grid',
     gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
@@ -883,7 +1146,7 @@ const styles = {
     border: '1px solid #fecaca'
   },
 
-  // ✅ Styles pour période + heure combinés
+  // Styles pour période + heure combinés
   periodeHeureContainer: {
     display: 'flex',
     flexDirection: 'column',

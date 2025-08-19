@@ -43,7 +43,7 @@ const MesExercicesEtudiant = () => {
     const fetchExercices = async () => {
       try {
         const token = localStorage.getItem('token');
-        const res = await fetch('http://localhost:5000/api/etudiant/mes-exercices', {
+        const res = await fetch('http://195.179.229.230:5004/api/etudiant/mes-exercices', {
           headers: {
             Authorization: `Bearer ${token}`,
           },
@@ -68,7 +68,7 @@ const MesExercicesEtudiant = () => {
     setDeletingId(exerciceId);
     try {
       const token = localStorage.getItem('token');
-      const res = await fetch(`http://localhost:5000/api/etudiant/exercices/${exerciceId}`, {
+      const res = await fetch(`http://195.179.229.230:5004/api/etudiant/exercices/${exerciceId}`, {
         method: 'DELETE',
         headers: {
           Authorization: `Bearer ${token}`,
@@ -533,13 +533,13 @@ const MesExercicesEtudiant = () => {
           </div>
 
           <div>
-            <label style={styles.label}>Cours</label>
+            <label style={styles.label}>classe</label>
             <select
               value={filterCours}
               onChange={(e) => setFilterCours(e.target.value)}
               style={styles.select}
             >
-              <option value="all">Tous les cours</option>
+              <option value="all">Tous les classes</option>
               {uniqueCours.map(cours => (
                 <option key={cours} value={cours}>{cours}</option>
               ))}
@@ -570,7 +570,7 @@ const MesExercicesEtudiant = () => {
             >
               <option value="dateEnvoi">Date d'envoi</option>
               <option value="titre">Titre</option>
-              <option value="cours">Cours</option>
+              <option value="cours">classe</option>
               <option value="type">Type</option>
               <option value="numero">Numéro</option>
             </select>
@@ -654,7 +654,7 @@ const MesExercicesEtudiant = () => {
                 <div style={styles.infoItem}>
                   <BookOpen size={16} style={styles.infoIcon} />
                   <p style={styles.infoText}>
-                    Cours: <span style={styles.infoValue}>{ex.cours}</span>
+                    Classe: <span style={styles.infoValue}>{ex.cours}</span>
                   </p>
                 </div>
                 <div style={styles.infoItem}>
@@ -683,7 +683,7 @@ const MesExercicesEtudiant = () => {
 
               <div style={styles.actionsContainer}>
                 <a
-                  href={`http://localhost:5000${ex.fichier}`}
+                  href={`http://195.179.229.230:5004${ex.fichier}`}
                   target="_blank"
                   rel="noreferrer"
                   style={styles.downloadButton}

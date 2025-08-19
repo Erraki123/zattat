@@ -106,6 +106,8 @@ const PaiementsExp = () => {
           const aUrgency = urgencyOrder[getUrgencyLevel(a.derniereFin)] || 0;
           const bUrgency = urgencyOrder[getUrgencyLevel(b.derniereFin)] || 0;
           return bUrgency - aUrgency;
+        case 'amount':
+          return (b.reste || 0) - (a.reste || 0);
         default:
           // Tri par défaut : plus urgent (plus de jours expirés) en premier
           const aJours = calculerJoursExpirés(a.derniereFin);
@@ -129,7 +131,7 @@ const PaiementsExp = () => {
         return;
       }
 
-      const res = await fetch('http://localhost:5000/api/paiements/exp', {
+      const res = await fetch('http://195.179.229.230:5004/api/paiements/exp', {
         headers: { 
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
@@ -157,6 +159,18 @@ const PaiementsExp = () => {
   const formatDate = (isoDate) => {
     if (!isoDate) return '—';
     return new Date(isoDate).toLocaleDateString('fr-FR');
+  };
+
+  // Format montant avec devise
+  const formatMontant = (montant) => {
+    if (!montant && montant !== 0) return '0 MAD';
+    return `${Number(montant).toLocaleString('fr-FR')} MAD`;
+  };
+
+  // Calculer le pourcentage payé
+  const calculerPourcentagePaye = (montantPaye, prixTotal) => {
+    if (!prixTotal || prixTotal === 0) return 0;
+    return Math.round((montantPaye / prixTotal) * 100);
   };
 
   // Calculer les jours expirés depuis derniereFin
@@ -256,6 +270,11 @@ const PaiementsExp = () => {
     return count;
   }, [searchTerm, filterBy, urgencyFilter, courseFilter, dateRangeFilter]);
 
+  // Calculer le total des montants restants
+  const totalReste = useMemo(() => {
+    return filtered.reduce((total, p) => total + (p.reste || 0), 0);
+  }, [filtered]);
+
   // Raccourci clavier
   useEffect(() => {
     const handleKeyDown = (e) => {
@@ -305,6 +324,14 @@ const PaiementsExp = () => {
       padding: '16px 24px',
       borderRadius: '10px',
       minWidth: '160px',
+      textAlign: 'center'
+    },
+    statCardMoney: {
+      background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)',
+      color: 'white',
+      padding: '16px 24px',
+      borderRadius: '10px',
+      minWidth: '180px',
       textAlign: 'center'
     },
     statNumber: {
@@ -394,7 +421,7 @@ const PaiementsExp = () => {
     },
     grid: {
       display: 'grid',
-      gridTemplateColumns: 'repeat(auto-fill, minmax(380px, 1fr))',
+      gridTemplateColumns: 'repeat(auto-fill, minmax(420px, 1fr))',
       gap: '20px'
     },
     card: {
@@ -478,6 +505,32 @@ const PaiementsExp = () => {
     },
     detailValue: {
       fontWeight: '600'
+    },
+    montantSection: {
+      display: 'grid',
+      gridTemplateColumns: '1fr 1fr 1fr',
+      gap: '8px',
+      marginTop: '8px',
+      marginBottom: '16px',
+      padding: '12px',
+      background: '#f8fafc',
+      borderRadius: '8px',
+      border: '1px solid #e2e8f0'
+    },
+    montantItem: {
+      textAlign: 'center',
+      padding: '8px',
+      borderRadius: '6px'
+    },
+    montantLabel: {
+      fontSize: '12px',
+      color: '#6b7280',
+      marginBottom: '4px',
+      fontWeight: '500'
+    },
+    montantValue: {
+      fontSize: '14px',
+      fontWeight: '700'
     },
     loading: {
       display: 'flex',
@@ -633,7 +686,7 @@ const PaiementsExp = () => {
         <Search size={20} style={styles.searchIcon} />
         <input
           type="text"
-          placeholder="Rechercher par nom d'étudiant ou cours... (Ctrl+F)"
+          placeholder="Rechercher par nom d'étudiant ou classe... (Ctrl+F)"
           value={searchTerm}
           onChange={(e) => {
             setSearchTerm(e.target.value);
@@ -732,13 +785,13 @@ const PaiementsExp = () => {
         </select>
       </div>
       <div style={styles.filterGroup}>
-        <label style={styles.filterLabel}>Cours :</label>
+        <label style={styles.filterLabel}>Classe :</label>
         <select
           value={courseFilter}
           onChange={(e) => setCourseFilter(e.target.value)}
           style={styles.select}
         >
-          <option value="all">Tous les cours</option>
+          <option value="all">Tous les classe</option>
           {uniqueCourses.map(course => (
             <option key={course} value={course}>{course}</option>
           ))}
@@ -782,6 +835,10 @@ const PaiementsExp = () => {
             </div>
             <div style={styles.statLabel}>Critiques</div>
           </div>
+          <div style={styles.statCardMoney}>
+            <div style={styles.statNumber}>{formatMontant(totalReste)}</div>
+            <div style={styles.statLabel}>Total à recouvrer</div>
+          </div>
         </div>
 
         <div>
@@ -798,8 +855,9 @@ const PaiementsExp = () => {
             >
               <option value="urgency">Niveau d'urgence</option>
               <option value="name">Nom étudiant</option>
-              <option value="course">Cours</option>
+              <option value="course">Classe</option>
               <option value="expired">Plus expiré</option>
+              <option value="amount">Montant restant</option>
             </select>
           </div>
         </div>
@@ -844,7 +902,7 @@ const PaiementsExp = () => {
                   <div style={styles.studentInfo}>
                     {p.etudiant?.image ? (
                       <img
-                        src={`http://localhost:5000${p.etudiant.image}`}
+                        src={`http://195.179.229.230:5004${p.etudiant.image}`}
                         alt="Avatar"
                         style={{
                           width: '48px',
@@ -897,7 +955,70 @@ const PaiementsExp = () => {
                 
                 <div style={styles.courseInfo}>
                   <BookOpen size={20} color="#6366f1" />
-                  <span style={styles.courseName}>{p.cours || 'Cours non spécifié'}</span>
+                  <span style={styles.courseName}>{p.cours || 'classe non spécifié'}</span>
+                </div>
+
+                {/* Section des montants */}
+                <div style={styles.montantSection}>
+                  <div style={{...styles.montantItem, background: '#f0fdf4'}}>
+                    <div style={styles.montantLabel}>Prix Total</div>
+                    <div style={{...styles.montantValue, color: '#059669'}}>
+                      {formatMontant(p.prixTotal || 0)}
+                    </div>
+                  </div>
+                  <div style={{...styles.montantItem, background: '#fff7ed'}}>
+                    <div style={styles.montantLabel}>Payé</div>
+                    <div style={{...styles.montantValue, color: '#ea580c'}}>
+                      {formatMontant(p.montantPaye || 0)}
+                    </div>
+                  </div>
+                  <div style={{...styles.montantItem, background: '#fef2f2'}}>
+                    <div style={styles.montantLabel}>Reste</div>
+                    <div style={{...styles.montantValue, color: '#dc2626'}}>
+                      {formatMontant(p.reste || 0)}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Barre de progression */}
+                <div style={{
+                  marginBottom: '16px',
+                  padding: '12px',
+                  background: '#f8fafc',
+                  borderRadius: '8px',
+                  border: '1px solid #e2e8f0'
+                }}>
+                  <div style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    marginBottom: '8px'
+                  }}>
+                    <span style={{ fontSize: '13px', color: '#6b7280', fontWeight: '500' }}>
+                      Progression du paiement
+                    </span>
+                    <span style={{ fontSize: '13px', color: '#374151', fontWeight: '600' }}>
+                      {calculerPourcentagePaye(p.montantPaye || 0, p.prixTotal || 0)}%
+                    </span>
+                  </div>
+                  <div style={{
+                    width: '100%',
+                    height: '8px',
+                    background: '#e5e7eb',
+                    borderRadius: '4px',
+                    overflow: 'hidden'
+                  }}>
+                    <div style={{
+                      width: `${calculerPourcentagePaye(p.montantPaye || 0, p.prixTotal || 0)}%`,
+                      height: '100%',
+                      background: calculerPourcentagePaye(p.montantPaye || 0, p.prixTotal || 0) >= 80 
+                        ? 'linear-gradient(90deg, #10b981, #059669)' 
+                        : calculerPourcentagePaye(p.montantPaye || 0, p.prixTotal || 0) >= 50
+                        ? 'linear-gradient(90deg, #f59e0b, #d97706)'
+                        : 'linear-gradient(90deg, #ef4444, #dc2626)',
+                      transition: 'width 0.3s ease'
+                    }} />
+                  </div>
                 </div>
                 
                 <div style={styles.detailsGrid}>
@@ -983,9 +1104,12 @@ const PaiementsExp = () => {
             <thead>
               <tr style={styles.tableHeader}>
                 <th style={styles.tableCellHeader}>Étudiant</th>
-                <th style={styles.tableCellHeader}>Cours</th>
+                <th style={styles.tableCellHeader}>Classe</th>
                 <th style={styles.tableCellHeader}>Date d'expiration</th>
                 <th style={styles.tableCellHeader}>Jours expirés</th>
+                <th style={styles.tableCellHeader}>Prix Total</th>
+                <th style={styles.tableCellHeader}>Payé</th>
+                <th style={styles.tableCellHeader}>Reste</th>
                 <th style={styles.tableCellHeader}>Urgence</th>
                 <th style={styles.tableCellHeader}>Action</th>
               </tr>
@@ -1025,7 +1149,7 @@ const PaiementsExp = () => {
                       <div style={styles.studentCell}>
                         {p.etudiant?.image ? (
                           <img
-                            src={`http://localhost:5000${p.etudiant.image}`}
+                            src={`http://195.179.229.230:5004${p.etudiant.image}`}
                             alt="Avatar"
                             style={{
                               width: '32px',
@@ -1044,7 +1168,7 @@ const PaiementsExp = () => {
                     </td>
                     <td style={styles.tableCell}>
                       <span style={{fontWeight: '500', color: '#6366f1'}}>
-                        {p.cours || 'Cours non spécifié'}
+                        {p.cours || 'Classe non spécifié'}
                       </span>
                     </td>
                     <td style={styles.tableCell}>
@@ -1056,6 +1180,21 @@ const PaiementsExp = () => {
                       <div style={styles.statusBadge}>
                         {joursExpirés} jour{joursExpirés > 1 ? 's' : ''}
                       </div>
+                    </td>
+                    <td style={styles.tableCell}>
+                      <span style={{color: '#059669', fontWeight: '600'}}>
+                        {formatMontant(p.prixTotal || 0)}
+                      </span>
+                    </td>
+                    <td style={styles.tableCell}>
+                      <span style={{color: '#ea580c', fontWeight: '600'}}>
+                        {formatMontant(p.montantPaye || 0)}
+                      </span>
+                    </td>
+                    <td style={styles.tableCell}>
+                      <span style={{color: '#dc2626', fontWeight: '700'}}>
+                        {formatMontant(p.reste || 0)}
+                      </span>
                     </td>
                     <td style={styles.tableCell}>
                       <div style={{
@@ -1193,7 +1332,7 @@ const PaiementsExp = () => {
             }}>
               {selectedPaiement.etudiant?.image ? (
                 <img
-                  src={`http://localhost:5000${selectedPaiement.etudiant.image}`}
+                  src={`http://195.179.229.230:5004${selectedPaiement.etudiant.image}`}
                   alt="Photo étudiant"
                   style={{
                     width: '80px',
@@ -1243,6 +1382,80 @@ const PaiementsExp = () => {
                 </p>
               </div>
             </div>
+
+            {/* Section des montants dans la modal */}
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: '1fr 1fr 1fr',
+              gap: '16px',
+              marginBottom: '24px'
+            }}>
+              <div style={{
+                padding: '16px',
+                background: '#f0fdf4',
+                borderRadius: '12px',
+                border: '1px solid #bbf7d0',
+                textAlign: 'center'
+              }}>
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '8px',
+                  marginBottom: '8px'
+                }}>
+                  <CreditCard size={20} color="#059669" />
+                  <span style={{fontSize: '14px', color: '#6b7280'}}>Prix Total</span>
+                </div>
+                <div style={{fontSize: '18px', fontWeight: '700', color: '#059669'}}>
+                  {formatMontant(selectedPaiement.prixTotal || 0)}
+                </div>
+              </div>
+              
+              <div style={{
+                padding: '16px',
+                background: '#fff7ed',
+                borderRadius: '12px',
+                border: '1px solid #fed7aa',
+                textAlign: 'center'
+              }}>
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '8px',
+                  marginBottom: '8px'
+                }}>
+                  <CheckCircle size={20} color="#ea580c" />
+                  <span style={{fontSize: '14px', color: '#6b7280'}}>Payé</span>
+                </div>
+                <div style={{fontSize: '18px', fontWeight: '700', color: '#ea580c'}}>
+                  {formatMontant(selectedPaiement.montantPaye || 0)}
+                </div>
+              </div>
+              
+              <div style={{
+                padding: '16px',
+                background: '#fef2f2',
+                borderRadius: '12px',
+                border: '1px solid #fecaca',
+                textAlign: 'center'
+              }}>
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '8px',
+                  marginBottom: '8px'
+                }}>
+                  <XCircle size={20} color="#dc2626" />
+                  <span style={{fontSize: '14px', color: '#6b7280'}}>Reste</span>
+                </div>
+                <div style={{fontSize: '20px', fontWeight: '700', color: '#dc2626'}}>
+                  {formatMontant(selectedPaiement.reste || 0)}
+                </div>
+              </div>
+            </div>
             
             {/* Détails du paiement */}
             <div style={{
@@ -1259,7 +1472,7 @@ const PaiementsExp = () => {
               }}>
                 <BookOpen size={20} color="#059669" />
                 <div>
-                  <span style={{ color: '#6b7280', fontSize: '14px' }}>Cours : </span>
+                  <span style={{ color: '#6b7280', fontSize: '14px' }}>Classe : </span>
                   <span style={{ fontWeight: '600', color: '#059669' }}>
                     {selectedPaiement.cours}
                   </span>

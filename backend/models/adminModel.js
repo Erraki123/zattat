@@ -14,10 +14,19 @@ const adminSchema = new mongoose.Schema({
     motDePasse: {
         type: String,
         required: true
+    },
+    role: {
+        type: String,
+        enum: ['global', 'inscription', 'paiement'],
+        default: 'global',
+        required: true
+    },
+    actif: {
+        type: Boolean,
+        default: true
     }
 }, { timestamps: true });
 
-// ✅ نحتفظ فقط بهذه الطريقة للمقارنة
 adminSchema.methods.comparePassword = function (mot) {
     return bcrypt.compare(mot, this.motDePasse);
 };

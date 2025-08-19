@@ -54,7 +54,7 @@ const DocumentsProfesseur = () => {
   const fetchDocuments = async () => {
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch('http://localhost:5000/api/professeur/documents', {
+      const response = await fetch('http://195.179.229.230:5004/api/professeur/documents', {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -73,7 +73,7 @@ const DocumentsProfesseur = () => {
   const fetchCours = async () => {
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch('http://localhost:5000/api/professeur/mes-cours', {
+      const response = await fetch('http://195.179.229.230:5004/api/professeur/mes-cours', {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -143,7 +143,7 @@ const DocumentsProfesseur = () => {
     formData.append('fichier', file);
 
     try {
-      const response = await fetch('http://localhost:5000/api/documents', {
+      const response = await fetch('http://195.179.229.230:5004/api/documents', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`
@@ -186,7 +186,7 @@ const DocumentsProfesseur = () => {
     
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(`http://localhost:5000/api/documents/${documentId}`, {
+      const response = await fetch(`http://195.179.229.230:5004/api/documents/${documentId}`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${token}`
@@ -781,7 +781,7 @@ const DocumentsProfesseur = () => {
               <Search style={styles.searchIcon} />
               <input
                 type="text"
-                placeholder="Rechercher un document ou un cours..."
+                placeholder="Rechercher un document ou un classe..."
                 style={styles.searchInput}
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
@@ -800,7 +800,7 @@ const DocumentsProfesseur = () => {
                 onFocus={(e) => e.target.style.borderColor = '#2563eb'}
                 onBlur={(e) => e.target.style.borderColor = '#d1d5db'}
               >
-                <option value="">Tous les cours</option>
+                <option value="">Tous les classes</option>
                 {uniqueCourses.map(course => (
                   <option key={course} value={course}>{course}</option>
                 ))}
@@ -856,7 +856,7 @@ const DocumentsProfesseur = () => {
 
                     <div style={styles.buttonContainer}>
                       <a
-                        href={`http://localhost:5000${doc.fichier}`}
+                        href={`http://195.179.229.230:5004${doc.fichier}`}
                         target="_blank"
                         rel="noreferrer"
                         style={{...styles.button, ...styles.buttonOutline}}
@@ -917,7 +917,7 @@ const DocumentsProfesseur = () => {
                     </div>
                     <div style={styles.listButtons}>
                       <a
-                        href={`http://localhost:5000${doc.fichier}`}
+                        href={`http://195.179.229.230:5004${doc.fichier}`}
                         target="_blank"
                         rel="noreferrer"
                         style={{...styles.listButton, ...styles.buttonOutline}}
@@ -1001,7 +1001,7 @@ const DocumentsProfesseur = () => {
               </div>
 
               <div style={styles.formGroup}>
-                <label style={styles.label}>Cours</label>
+                <label style={styles.label}>Classe</label>
                 <select
                   value={cours}
                   onChange={(e) => setCours(e.target.value)}
@@ -1010,7 +1010,7 @@ const DocumentsProfesseur = () => {
                   onBlur={(e) => e.target.style.borderColor = '#d1d5db'}
                   required
                 >
-                  <option value="">Sélectionnez un cours</option>
+                  <option value="">Sélectionnez un classe</option>
                   {mesCours.map(c => (
                     <option key={c._id} value={c.nom}>{c.nom}</option>
                   ))}
@@ -1073,7 +1073,7 @@ const DocumentsProfesseur = () => {
                   {uploadLoading ? (
                     <>
                       <Loader2 style={{width: '16px', height: '16px'}} className="animate-spin" />
-                      Envoi en cours...
+                      Envoi en classe...
                     </>
                   ) : (
                     <>

@@ -27,9 +27,9 @@ const ListeCours = () => {
         const token = localStorage.getItem('token');
         const config = { headers: { Authorization: `Bearer ${token}` } };
 
-        const resCours = await fetch('http://localhost:5000/api/cours', config);
-        const resEtudiants = await fetch('http://localhost:5000/api/etudiants', config);
-        const resProfs = await fetch('http://localhost:5000/api/professeurs', config);
+        const resCours = await fetch('http://195.179.229.230:5004/api/cours', config);
+        const resEtudiants = await fetch('http://195.179.229.230:5004/api/etudiants', config);
+        const resProfs = await fetch('http://195.179.229.230:5004/api/professeurs', config);
 
         if (resCours.ok && resEtudiants.ok && resProfs.ok) {
           const coursData = await resCours.json();
@@ -68,7 +68,7 @@ const ListeCours = () => {
 
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch('http://localhost:5000/api/cours', {
+      const response = await fetch('http://195.179.229.230:5004/api/cours', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -115,7 +115,7 @@ const ListeCours = () => {
     
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(`http://localhost:5000/api/cours/${coursASupprimer._id}`, {
+      const response = await fetch(`http://195.179.229.230:5004/api/cours/${coursASupprimer._id}`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${token}`
@@ -601,7 +601,7 @@ const ListeCours = () => {
               <div style={styles.iconContainer}>
               </div>
               <div>
-                <h1 style={{ ...styles.title, textAlign: 'center', width: '100%' }}>Gestion des Cours</h1>
+                <h1 style={{ ...styles.title, textAlign: 'center', width: '100%' }}>Gestion des classe</h1>
               </div>
             </div>
             <button
@@ -617,7 +617,7 @@ const ListeCours = () => {
               }}
             >
               <Plus size={20} />
-              Nouveau Cours
+              Nouveau classe
             </button>
           </div>
         </div>

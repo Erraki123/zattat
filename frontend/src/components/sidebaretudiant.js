@@ -11,7 +11,9 @@ import {
   FileText,
   LogOut,
   Menu,
+  Lock,
   X,
+  FilePlus2,
   Upload,
   BookOpen,
     MessageCircle,
@@ -78,9 +80,9 @@ const SidebarEtudiant = ({ onLogout }) => {
 
     },
   {
-      path: '/qr-etudiant',
-      label: 'Scanner QR',
-      icon: QrCode
+      path: '/etudiant/Bulletin',
+      label: 'Bulletin',
+      icon: FilePlus2
 
     },
    
@@ -121,6 +123,13 @@ const SidebarEtudiant = ({ onLogout }) => {
       label: 'Mes Exercices',
       icon: BookOpen
     }
+    ,
+   {
+      path: '/etudiant/profil',
+      label: 'Mot de passe',
+      icon: Lock
+    }
+    
   ];
 
   // Utiliser location.pathname au lieu d'un state local
@@ -137,7 +146,7 @@ const SidebarEtudiant = ({ onLogout }) => {
 
   return (
     <div>
-      <style jsx>{`
+  <style jsx>{`
         /* Variables CSS */
         :root {
           --sidebar-width: 280px;
@@ -165,11 +174,11 @@ const SidebarEtudiant = ({ onLogout }) => {
           box-sizing: border-box;
         }
 
-        /* Toggle Button - Toujours visible */
+        /* Toggle Button - Positionné en dehors de la sidebar */
         .sidebar-toggle {
           position: fixed;
           top: 20px;
-          left: 20px;
+          left: ${isOpen ? 'calc(var(--sidebar-width) + 20px)' : '20px'};
           z-index: 1001;
           background: var(--primary-color);
           color: white;
@@ -184,6 +193,13 @@ const SidebarEtudiant = ({ onLogout }) => {
           justify-content: center;
           width: 48px;
           height: 48px;
+        }
+
+        /* Sur mobile, le bouton reste à gauche */
+        @media (max-width: 768px) {
+          .sidebar-toggle {
+            left: 20px !important;
+          }
         }
 
         .sidebar-toggle:hover {
@@ -288,15 +304,6 @@ const SidebarEtudiant = ({ onLogout }) => {
           display: flex;
           align-items: center;
           justify-content: center;
-        }
-
-        .sidebar-subtitle {
-          font-size: 12px;
-          font-weight: 400;
-          color: rgba(255, 255, 255, 0.8);
-          margin-top: 4px;
-          position: relative;
-          z-index: 1;
         }
 
         /* Navigation */

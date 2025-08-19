@@ -8,7 +8,8 @@ import {
   BookOpen,
   Calendar,
   BadgeEuro,
-  StickyNote
+  StickyNote,
+  Info
 } from 'lucide-react';
 
 const handleLogout = () => {
@@ -19,7 +20,12 @@ const handleLogout = () => {
 const AjouterPaiement = () => {
   const [etudiants, setEtudiants] = useState([]);
   const [cours, setCours] = useState([]);
-  const [etudiantsComplets, setEtudiantsComplets] = useState([]); // Pour stocker les données complètes des étudiants
+  const [etudiantsComplets, setEtudiantsComplets] = useState([]);
+  
+  const [prixTotalEtudiant, setPrixTotalEtudiant] = useState(0);
+  const [totalDejaPaye, setTotalDejaPaye] = useState(0);
+  const [resteAPayer, setResteAPayer] = useState(0);
+  
   const [form, setForm] = useState({
     etudiant: '',
     cours: [],
@@ -27,12 +33,10 @@ const AjouterPaiement = () => {
     nombreMois: 1,
     montant: '',
     note: '',
-    typePaiement: 'mensuel' // 'annuel' ou 'mensuel'
+    typePaiement: 'mensuel'
   });
 
   const [message, setMessage] = useState('');
-
-  // 🎯 Étape 1 : Déclare les états nécessaires
   const [showRappelModal, setShowRappelModal] = useState(false);
   const [note, setNote] = useState('');
   const [dateRappel, setDateRappel] = useState('');
@@ -43,27 +47,51 @@ const AjouterPaiement = () => {
       const config = { headers: { Authorization: `Bearer ${token}` } };
 
       try {
-        const resEtudiants = await axios.get('http://localhost:5000/api/etudiants', config);
-        const resCours = await axios.get('http://localhost:5000/api/cours', config);
+        const resEtudiants = await axios.get('http://195.179.229.230:5004/api/etudiants', config);
+        const resCours = await axios.get('http://195.179.229.230:5004/api/cours', config);
 
-        // Stocker les données complètes des étudiants
-        setEtudiantsComplets(resEtudiants.data.filter(e => e.actif));
+        const etudiantsActifs = resEtudiants.data.filter(e => e.actif);
 
-        setEtudiants(resEtudiants.data
-          .filter(e => e.actif)
-          .map(e => ({ value: e._id, label: e.nomComplet })));
+        setEtudiantsComplets(etudiantsActifs);
 
+        const etudiantsOptions = etudiantsActifs.map(e => ({
+          value: e._id,
+          label: e.nomComplet // ✅ Utiliser nomComplet
+        }));
+
+        setEtudiants(etudiantsOptions);
         setCours(resCours.data.map(c => ({ value: c.nom, label: c.nom })));
 
+        // ✅ Traitement des données pré-remplies APRÈS avoir chargé les étudiants
         const savedData = JSON.parse(localStorage.getItem('paiementPreRempli'));
         if (savedData) {
-          setForm(prev => ({
-            ...prev,
-            etudiant: savedData.etudiant || '',
-            cours: savedData.cours || []
-          }));
+          const etuId = savedData.etudiant;
+          const coursSaved = savedData.cours || [];
+
+          // ✅ Trouver l'étudiant complet avec l'ID
+          const etudiantComplet = etudiantsActifs.find(e => e._id === etuId);
+          
+          if (etudiantComplet) {
+            // ✅ Créer l'option pour le Select avec le nom complet
+            const etudiantOption = {
+              value: etuId,
+              label: etudiantComplet.nomComplet // ✅ Utiliser nomComplet
+            };
+
+            // ✅ Mettre à jour le formulaire
+            setForm(prev => ({
+              ...prev,
+              etudiant: etuId,
+              cours: coursSaved
+            }));
+
+            // ✅ Déclencher le calcul des paiements
+            await handleEtudiantChangeInternal(etudiantComplet, etuId, coursSaved);
+          }
+
           localStorage.removeItem('paiementPreRempli');
         }
+
       } catch (err) {
         console.error('Erreur chargement données:', err);
       }
@@ -72,71 +100,126 @@ const AjouterPaiement = () => {
     fetchData();
   }, []);
 
+  // ✅ Fonction interne pour éviter les dépendances circulaires
+  const handleEtudiantChangeInternal = async (etudiantComplet, etudiantId, coursEtudiant = null) => {
+    try {
+      // ✅ Récupérer les cours de l'étudiant
+      let coursFinaux = coursEtudiant;
+      if (!coursFinaux) {
+        coursFinaux = etudiantComplet?.cours || etudiantComplet?.coursInscrits || [];
+      }
+
+      // ✅ Calculer les paiements
+      const token = localStorage.getItem('token');
+      const resPaiements = await axios.get(`http://195.179.229.230:5004/api/paiements/etudiant/${etudiantId}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+
+      const paiements = resPaiements.data || [];
+      const totalPaye = paiements.reduce((acc, p) => acc + (p.montant || 0), 0);
+      const prixTotal = etudiantComplet?.prixTotal || 0;
+      const reste = Math.max(0, prixTotal - totalPaye);
+
+      setPrixTotalEtudiant(prixTotal);
+      setTotalDejaPaye(totalPaye);
+      setResteAPayer(reste);
+
+    } catch (err) {
+      console.error('Erreur lors du calcul des paiements:', err);
+      const prixTotal = etudiantComplet?.prixTotal || 0;
+      setPrixTotalEtudiant(prixTotal);
+      setTotalDejaPaye(0);
+      setResteAPayer(prixTotal);
+    }
+  };
+
   const handleChange = e => {
     setForm({ ...form, [e.target.name]: e.target.value });
   };
 
-  // Fonction pour gérer la sélection d'un étudiant
-  const handleEtudiantChange = (selectedEtudiant) => {
+  const handleEtudiantChange = async (selectedEtudiant) => {
     if (selectedEtudiant) {
-      // Trouver l'étudiant complet avec ses cours
-      const etudiantComplet = etudiantsComplets.find(e => e._id === selectedEtudiant.value);
+      const etudiantId = selectedEtudiant.value;
+      const etudiantComplet = etudiantsComplets.find(e => e._id === etudiantId);
       
-      // Extraire les cours de l'étudiant (supposons que les cours sont dans un champ 'cours' ou 'coursInscrits')
       let coursEtudiant = [];
       if (etudiantComplet && etudiantComplet.cours) {
-        // Si les cours sont stockés comme un tableau de noms
         coursEtudiant = etudiantComplet.cours;
       } else if (etudiantComplet && etudiantComplet.coursInscrits) {
-        // Si les cours sont dans un champ 'coursInscrits'
         coursEtudiant = etudiantComplet.coursInscrits;
       }
       
       setForm({
         ...form,
-        etudiant: selectedEtudiant.value,
+        etudiant: etudiantId,
         cours: coursEtudiant
       });
+
+      await handleEtudiantChangeInternal(etudiantComplet, etudiantId);
     } else {
       setForm({
         ...form,
         etudiant: '',
         cours: []
       });
+      setPrixTotalEtudiant(0);
+      setTotalDejaPaye(0);
+      setResteAPayer(0);
     }
   };
 
+  const remplirMontantRestant = () => {
+    setForm({
+      ...form,
+      montant: resteAPayer.toString()
+    });
+  };
+
   const handleSubmit = async () => {
+    if (resteAPayer <= 0) {
+      setMessage('❌ Cet étudiant a déjà payé la totalité du montant dû.');
+      return;
+    }
+
+    if (parseFloat(form.montant) > resteAPayer) {
+      setMessage(`❌ Le montant ne peut pas dépasser le reste à payer (${resteAPayer} MAD).`);
+      return;
+    }
+
     const token = localStorage.getItem('token');
     try {
-      await axios.post('http://localhost:5000/api/paiements', form, {
+      await axios.post('http://195.179.229.230:5004/api/paiements', form, {
         headers: { Authorization: `Bearer ${token}` }
       });
       setMessage('✅ Paiement ajouté avec succès');
+      
       setForm({
         etudiant: '',
         cours: [],
         moisDebut: '',
         nombreMois: 1,
         montant: '',
-        note: ''
+        note: '',
+        typePaiement: 'mensuel'
       });
+      
+      setPrixTotalEtudiant(0);
+      setTotalDejaPaye(0);
+      setResteAPayer(0);
     } catch (err) {
       console.error('Erreur ajout:', err);
       setMessage('❌ Erreur lors de l\'ajout du paiement');
     }
   };
 
-  // Fonction pour enregistrer le rappel
   const handleAjouterRappel = async () => {
     if (!dateRappel || !note) {
       alert("Veuillez remplir tous les champs !");
       return;
     }
 
-    // ✅ تحقق من بيانات الدفع أولاً
     if (!form.etudiant || !form.montant || !form.cours || form.cours.length === 0) {
-      alert("Veuillez remplir le paiement d'abord (étudiant, montant, cours).");
+      alert("Veuillez remplir le paiement d'abord (étudiant, montant, classe).");
       return;
     }
 
@@ -153,7 +236,7 @@ const AjouterPaiement = () => {
     };
 
     try {
-      const res = await fetch('http://localhost:5000/api/rappels', {
+      const res = await fetch('http://195.179.229.230:5004/api/rappels', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data)
@@ -179,12 +262,12 @@ const AjouterPaiement = () => {
     }
   }, [form.typePaiement]);
 
-   useEffect(() => {
-     if (form.typePaiement === 'annuel') {
-       const montantMensuel = form.montant / (form.nombreMois || 1);
-       setForm(prev => ({ ...prev, montant: montantMensuel * 12 }));
-     }
-   }, [form.nombreMois]);
+  useEffect(() => {
+    if (form.typePaiement === 'annuel') {
+      const montantMensuel = form.montant / (form.nombreMois || 1);
+      setForm(prev => ({ ...prev, montant: montantMensuel * 12 }));
+    }
+  }, [form.nombreMois]);
 
   const styles = {
     container: {
@@ -206,6 +289,37 @@ const AjouterPaiement = () => {
       color: '#1f2937',
       textAlign: 'center',
       marginBottom: '30px'
+    },
+    infoPaiement: {
+      backgroundColor: '#f0f9ff',
+      border: '1px solid #bae6fd',
+      borderRadius: '12px',
+      padding: '20px',
+      marginBottom: '25px',
+      display: 'grid',
+      gridTemplateColumns: '1fr 1fr 1fr',
+      gap: '20px',
+      alignItems: 'center'
+    },
+    infoItem: {
+      textAlign: 'center'
+    },
+    infoLabel: {
+      fontSize: '14px',
+      color: '#6b7280',
+      marginBottom: '5px',
+      fontWeight: '500'
+    },
+    infoValue: {
+      fontSize: '18px',
+      fontWeight: 'bold',
+      color: '#1f2937'
+    },
+    infoValuePaid: {
+      color: '#059669'
+    },
+    infoValueRemaining: {
+      color: '#dc2626'
     },
     formGrid: {
       display: 'grid',
@@ -239,10 +353,6 @@ const AjouterPaiement = () => {
       transition: 'all 0.2s ease',
       outline: 'none'
     },
-    inputFocus: {
-      borderColor: '#3b82f6',
-      boxShadow: '0 0 0 3px rgba(59, 130, 246, 0.1)'
-    },
     textarea: {
       width: '100%',
       padding: '12px',
@@ -258,6 +368,8 @@ const AjouterPaiement = () => {
     buttonContainer: {
       display: 'flex',
       justifyContent: 'center',
+      alignItems: 'center',
+      gap: '16px',
       marginTop: '30px'
     },
     button: {
@@ -275,10 +387,10 @@ const AjouterPaiement = () => {
       transition: 'all 0.2s ease',
       boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)'
     },
-    buttonHover: {
-      backgroundColor: '#2563eb',
-      transform: 'translateY(-1px)',
-      boxShadow: '0 6px 12px rgba(0, 0, 0, 0.15)'
+    quickFillButton: {
+      backgroundColor: '#10b981',
+      fontSize: '14px',
+      padding: '8px 16px'
     },
     message: {
       marginTop: '20px',
@@ -296,20 +408,6 @@ const AjouterPaiement = () => {
       color: '#dc2626'
     }
   };
-
-  const mediaQueries = `
-    @media (max-width: 768px) {
-      .form-row {
-        grid-template-columns: 1fr !important;
-      }
-      .form-container {
-        padding: 20px !important;
-      }
-      .title {
-        font-size: 1.5rem !important;
-      }
-    }
-  `;
 
   const selectStyles = {
     control: (provided, state) => ({
@@ -348,31 +446,38 @@ const AjouterPaiement = () => {
 
   return (
     <>
-      <style>{mediaQueries}</style>
       <div style={styles.container}>
         <Sidebar onLogout={handleLogout} />
         
-        <div style={styles.formContainer} className="form-container">
-          <h2 style={styles.title} className="title">Ajouter un Paiement</h2>
+        <div style={styles.formContainer}>
+          <h2 style={styles.title}>Ajouter un Paiement</h2>
+
+          {form.etudiant && (
+            <div style={styles.infoPaiement}>
+              <div style={styles.infoItem}>
+                <div style={styles.infoLabel}>
+                  <Info size={16} style={{display: 'inline', marginRight: '4px'}} />
+                  Prix Total
+                </div>
+                <div style={styles.infoValue}>{prixTotalEtudiant} MAD</div>
+              </div>
+              <div style={styles.infoItem}>
+                <div style={styles.infoLabel}>Déjà Payé</div>
+                <div style={{...styles.infoValue, ...styles.infoValuePaid}}>{totalDejaPaye} MAD</div>
+              </div>
+              <div style={styles.infoItem}>
+                <div style={styles.infoLabel}>Reste à Payer</div>
+                <div style={{...styles.infoValue, ...styles.infoValueRemaining}}>{resteAPayer} MAD</div>
+              </div>
+            </div>
+          )}
 
           <div style={styles.formGrid}>
-            {/* Type de paiement */}
             <div style={styles.formGroup}>
-              <label style={styles.label}>
-                Type de paiement
-              </label>
-              <select
-                name="typePaiement"
-                value={form.typePaiement}
-                onChange={handleChange}
-                style={styles.input}
-              >
-                <option value="mensuel">Paiement mensuel</option>
-                <option value="annuel">Paiement annuel (12 mois)</option>
-              </select>
+             
             </div>
-            {/* Première ligne - Étudiant et Cours */}
-            <div style={styles.formRow} className="form-row">
+
+            <div style={styles.formRow}>
               <div style={styles.formGroup}>
                 <label style={styles.label}>
                   <UserRoundSearch size={16} style={{color: '#3b82f6'}} />
@@ -391,7 +496,7 @@ const AjouterPaiement = () => {
               <div style={styles.formGroup}>
                 <label style={styles.label}>
                   <BookOpen size={16} style={{color: '#10b981'}} />
-                  Cours
+                  Classe
                 </label>
                 <Select
                   options={cours}
@@ -402,7 +507,7 @@ const AjouterPaiement = () => {
                       cours: selectedOptions ? selectedOptions.map(opt => opt.value) : []
                     })
                   }
-                  placeholder="Cours sélectionnés automatiquement"
+                  placeholder="Classe sélectionnés automatiquement"
                   isMulti
                   isSearchable
                   styles={selectStyles}
@@ -410,8 +515,7 @@ const AjouterPaiement = () => {
               </div>
             </div>
 
-            {/* Deuxième ligne - Date de début et Nombre de mois */}
-            <div style={styles.formRow} className="form-row">
+            <div style={styles.formRow}>
               <div style={styles.formGroup}>
                 <label style={styles.label}>
                   <Calendar size={16} style={{color: '#8b5cf6'}} />
@@ -424,8 +528,6 @@ const AjouterPaiement = () => {
                   onChange={handleChange}
                   required
                   style={styles.input}
-                  onFocus={e => e.target.style.borderColor = '#3b82f6'}
-                  onBlur={e => e.target.style.borderColor = '#d1d5db'}
                 />
               </div>
 
@@ -442,18 +544,25 @@ const AjouterPaiement = () => {
                   min="1"
                   required
                   style={styles.input}
-                  onFocus={e => e.target.style.borderColor = '#3b82f6'}
-                  onBlur={e => e.target.style.borderColor = '#d1d5db'}
                 />
               </div>
             </div>
 
-            {/* Troisième ligne - Montant et Note */}
-            <div style={styles.formRow} className="form-row">
+            <div style={styles.formRow}>
               <div style={styles.formGroup}>
                 <label style={styles.label}>
                   <BadgeEuro size={16} style={{color: '#10b981'}} />
                   Montant
+                  {resteAPayer > 0 && (
+                    <button
+                      type="button"
+                      onClick={remplirMontantRestant}
+                      style={{...styles.button, ...styles.quickFillButton, marginLeft: '8px'}}
+                      title="Remplir le montant restant"
+                    >
+                      Reste: {resteAPayer} MAD
+                    </button>
+                  )}
                 </label>
                 <input
                   type="number"
@@ -463,9 +572,13 @@ const AjouterPaiement = () => {
                   required
                   placeholder="0.00"
                   style={styles.input}
-                  onFocus={e => e.target.style.borderColor = '#3b82f6'}
-                  onBlur={e => e.target.style.borderColor = '#d1d5db'}
+                  disabled={resteAPayer <= 0}
                 />
+                {resteAPayer <= 0 && (
+                  <small style={{color: '#059669', marginTop: '4px'}}>
+                    ✅ Cet étudiant a payé la totalité
+                  </small>
+                )}
               </div>
 
               <div style={styles.formGroup}>
@@ -479,44 +592,25 @@ const AjouterPaiement = () => {
                   onChange={handleChange}
                   placeholder="Ajouter une note..."
                   style={styles.textarea}
-                  onFocus={e => e.target.style.borderColor = '#3b82f6'}
-                  onBlur={e => e.target.style.borderColor = '#d1d5db'}
                 />
               </div>
             </div>
 
-            {/* Bouton de soumission */}
             <div style={styles.buttonContainer}>
               <button
                 onClick={handleSubmit}
                 style={styles.button}
-                onMouseEnter={e => {
-                  e.target.style.backgroundColor = '#2563eb';
-                  e.target.style.transform = 'translateY(-1px)';
-                  e.target.style.boxShadow = '0 6px 12px rgba(0, 0, 0, 0.15)';
-                }}
-                onMouseLeave={e => {
-                  e.target.style.backgroundColor = '#3b82f6';
-                  e.target.style.transform = 'translateY(0)';
-                  e.target.style.boxShadow = '0 4px 6px rgba(0, 0, 0, 0.1)';
-                }}
+                disabled={resteAPayer <= 0}
               >
                 <Save size={18} />
                 Enregistrer le Paiement
               </button>
-              {/* 🎯 Étape 2 : Bouton qui ouvre le modal */}
+              
               <button
                 onClick={() => setShowRappelModal(true)}
                 style={{
-                  background: '#3b82f6',
-                  color: 'white',
-                  padding: '10px 20px',
-                  borderRadius: '8px',
-                  border: 'none',
-                  marginLeft: '16px',
-                  fontWeight: '500',
-                  fontSize: '16px',
-                  cursor: 'pointer'
+                  ...styles.button,
+                  backgroundColor: '#8b5cf6'
                 }}
               >
                 Ajouter un rappel
@@ -524,14 +618,12 @@ const AjouterPaiement = () => {
             </div>
           </div>
 
-          {/* Message de confirmation */}
           {message && (
             <div style={message.includes('❌') ? {...styles.message, ...styles.messageError} : styles.message}>
               {message}
             </div>
           )}
 
-          {/* 🎯 Étape 3 : Composant du Modal */}
           {showRappelModal && (
             <div style={{
               position: 'fixed',
@@ -571,10 +663,16 @@ const AjouterPaiement = () => {
                 />
 
                 <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
-                  <button onClick={() => setShowRappelModal(false)} style={{ padding: '10px 16px', background: '#e5e7eb', border: 'none', borderRadius: '6px' }}>
+                  <button 
+                    onClick={() => setShowRappelModal(false)} 
+                    style={{ padding: '10px 16px', background: '#e5e7eb', border: 'none', borderRadius: '6px' }}
+                  >
                     Annuler
                   </button>
-                  <button onClick={handleAjouterRappel} style={{ padding: '10px 16px', background: '#059669', color: 'white', border: 'none', borderRadius: '6px' }}>
+                  <button 
+                    onClick={handleAjouterRappel} 
+                    style={{ padding: '10px 16px', background: '#059669', color: 'white', border: 'none', borderRadius: '6px' }}
+                  >
                     Enregistrer
                   </button>
                 </div>

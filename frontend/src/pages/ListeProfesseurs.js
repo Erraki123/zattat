@@ -89,7 +89,7 @@ const ListeProfesseurs = () => {
     try {
       setLoading(true);
       const token = localStorage.getItem('token');
-      const res = await axios.get('http://localhost:5000/api/professeurs', {
+      const res = await axios.get('http://195.179.229.230:5004/api/professeurs', {
         headers: { Authorization: `Bearer ${token}` }
       });
       setProfesseurs(res.data);
@@ -103,7 +103,7 @@ const ListeProfesseurs = () => {
   const fetchCours = async () => {
     try {
       const token = localStorage.getItem('token');
-      const res = await axios.get('http://localhost:5000/api/cours', {
+      const res = await axios.get('http://195.179.229.230:5004/api/cours', {
         headers: { Authorization: `Bearer ${token}` }
       });
       setListeCours(res.data);
@@ -208,7 +208,7 @@ const ListeProfesseurs = () => {
       formAjout.cours.forEach(c => formData.append('cours[]', c));
       if (imageFile) formData.append('image', imageFile);
 
-      const response = await axios.post('http://localhost:5000/api/professeurs', formData, {
+      const response = await axios.post('http://195.179.229.230:5004/api/professeurs', formData, {
         headers: {
           Authorization: `Bearer ${token}`,
           'Content-Type': 'multipart/form-data'
@@ -318,7 +318,7 @@ const ListeProfesseurs = () => {
       formModifier.cours.forEach(c => formData.append('cours[]', c));
       if (imageFileModifier) formData.append('image', imageFileModifier);
 
-      const response = await axios.put(`http://localhost:5000/api/professeurs/${professeurAModifier._id}`, formData, {
+      const response = await axios.put(`http://195.179.229.230:5004/api/professeurs/${professeurAModifier._id}`, formData, {
         headers: {
           Authorization: `Bearer ${token}`,
           'Content-Type': 'multipart/form-data'
@@ -343,7 +343,7 @@ setProfesseurs(professeurs.map(p => p._id === professeurAModifier._id ? response
   const handleToggleActif = async (id) => {
     try {
       const token = localStorage.getItem('token');
-      const res = await axios.patch(`http://localhost:5000/api/professeurs/${id}/actif`, {}, {
+      const res = await axios.patch(`http://195.179.229.230:5004/api/professeurs/${id}/actif`, {}, {
         headers: { Authorization: `Bearer ${token}` }
       });
       setProfesseurs(professeurs.map(p => p._id === id ? res.data : p));
@@ -357,7 +357,7 @@ setProfesseurs(professeurs.map(p => p._id === professeurAModifier._id ? response
 
     try {
       const token = localStorage.getItem('token');
-      await axios.delete(`http://localhost:5000/api/professeurs/${id}`, {
+      await axios.delete(`http://195.179.229.230:5004/api/professeurs/${id}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       setProfesseurs(professeurs.filter(p => p._id !== id));
@@ -492,13 +492,13 @@ setProfesseurs(professeurs.map(p => p._id === professeurAModifier._id ? response
           </div>
 
           <div className="filtre-groupe">
-            <label>Cours:</label>
+            <label>Classe:</label>
             <select
               value={filtreCours}
               onChange={(e) => setFiltreCours(e.target.value)}
               className="select-filtre"
             >
-              <option value="">Tous les cours</option>
+              <option value="">Tous les classe</option>
               {coursUniques.map(cours => (
                 <option key={cours} value={cours}>{cours}</option>
               ))}
@@ -549,7 +549,7 @@ setProfesseurs(professeurs.map(p => p._id === professeurAModifier._id ? response
                 <th>Téléphone</th>
                 <th>Email</th>
                 <th>Matière</th>
-                <th>Cours</th>
+                <th>Classe</th>
                 <th>Statut</th>
                 <th>Image</th>
                 <th>Actions</th>
@@ -573,7 +573,7 @@ setProfesseurs(professeurs.map(p => p._id === professeurAModifier._id ? response
                     <td>{p.email}</td>
                     <td>{p.matiere || 'Non définie'}</td>
                     <td className="cours-colonne">
-                      {p.cours?.join(', ') || 'Aucun cours'}
+                      {p.cours?.join(', ') || 'Aucun classe'}
                     </td>
                     <td className="statut-colonne">
                       <div className="toggle-switch-container">
@@ -593,7 +593,7 @@ setProfesseurs(professeurs.map(p => p._id === professeurAModifier._id ? response
                     <td className="image-colonne">
                       {p.image ? (
                         <img 
-                          src={`http://localhost:5000${p.image}`} 
+                          src={`http://195.179.229.230:5004${p.image}`} 
                           alt="professeur" 
                           className="image-etudiant"
                         />
@@ -642,7 +642,7 @@ setProfesseurs(professeurs.map(p => p._id === professeurAModifier._id ? response
                     <div className="carte-image">
                       {p.image ? (
                         <img 
-                          src={`http://localhost:5000${p.image}`} 
+                          src={`http://195.179.229.230:5004${p.image}`} 
                           alt="professeur" 
                           className="carte-photo"
                         />
@@ -691,14 +691,14 @@ setProfesseurs(professeurs.map(p => p._id === professeurAModifier._id ? response
                         </span>
                       </div>
                       <div className="carte-detail cours-detail">
-                        <span className="carte-label">Cours:</span>
+                        <span className="carte-label">Classe:</span>
                         <div className="carte-cours">
                           {p.cours.length > 0 ? (
                             p.cours.map((cours, index) => (
                               <span key={index} className="cours-tag">{cours}</span>
                             ))
                           ) : (
-                            <span className="no-cours">Aucun cours</span>
+                            <span className="no-cours">Aucun classe</span>
                           )}
                         </div>
                       </div>
@@ -871,7 +871,7 @@ setProfesseurs(professeurs.map(p => p._id === professeurAModifier._id ? response
               </div>
 
               <div className="form-group">
-                <label>Cours (multi-sélection possible)</label>
+                <label>Classe (multi-sélection possible)</label>
                 <div className="cours-selection-container">
                   {listeCours.map((cours) => (
                     <div
@@ -888,7 +888,7 @@ setProfesseurs(professeurs.map(p => p._id === professeurAModifier._id ? response
                 </div>
                 {formAjout.cours.length > 0 && (
                   <div className="cours-selectionnes">
-                    <small>Cours sélectionnés: {formAjout.cours.join(', ')}</small></div>
+                    <small>Classe sélectionnés: {formAjout.cours.join(', ')}</small></div>
                 )}
               </div>
 
@@ -944,7 +944,7 @@ setProfesseurs(professeurs.map(p => p._id === professeurAModifier._id ? response
                   className="btn-valider"
                   disabled={loadingAjout}
                 >
-                  {loadingAjout ? 'Ajout en cours...' : 'Ajouter le professeur'}
+                  {loadingAjout ? 'Ajout en classe...' : 'Ajouter le professeur'}
                 </button>
               </div>
             </form>
@@ -969,7 +969,7 @@ setProfesseurs(professeurs.map(p => p._id === professeurAModifier._id ? response
           <div className="etudiant-image-section">
             {professeurSelectionne.image ? (
               <img 
-                src={`http://localhost:5000${professeurSelectionne.image}`} 
+                src={`http://195.179.229.230:5004${professeurSelectionne.image}`} 
                 alt="Photo du professeur" 
                 className="etudiant-image-large"
               />
@@ -1043,7 +1043,7 @@ setProfesseurs(professeurs.map(p => p._id === professeurAModifier._id ? response
 
         <div className="cours-section">
           <h4>
-            <BookOpen size={20} className="inline mr-2" /> Cours Enseignés
+            <BookOpen size={20} className="inline mr-2" /> Classe Enseignés
           </h4>
           <div className="cours-badges">
             {professeurSelectionne.cours.length > 0 ? (
@@ -1051,7 +1051,7 @@ setProfesseurs(professeurs.map(p => p._id === professeurAModifier._id ? response
                 <span key={index} className="cours-badge">{cours}</span>
               ))
             ) : (
-              <span className="no-cours">Aucun cours assigné</span>
+              <span className="no-cours">Aucun classe assigné</span>
             )}
           </div>
         </div>
@@ -1169,7 +1169,7 @@ setProfesseurs(professeurs.map(p => p._id === professeurAModifier._id ? response
         </div>
 
         <div className="form-group">
-          <label>Cours (multi-sélection possible)</label>
+          <label>Classe (multi-sélection possible)</label>
           <div className="cours-selection-container">
             {listeCours.map((cours) => (
               <div
@@ -1186,7 +1186,7 @@ setProfesseurs(professeurs.map(p => p._id === professeurAModifier._id ? response
           </div>
           {formModifier.cours.length > 0 && (
             <div className="cours-selectionnes">
-              <small>Cours sélectionnés: {formModifier.cours.join(', ')}</small>
+              <small>Classe sélectionnés: {formModifier.cours.join(', ')}</small>
             </div>
           )}
         </div>
@@ -1203,7 +1203,7 @@ setProfesseurs(professeurs.map(p => p._id === professeurAModifier._id ? response
             <div className="image-actuelle">
               <small>Image actuelle :</small>
               <img 
-                src={`http://localhost:5000${professeurAModifier.image}`} 
+                src={`http://195.179.229.230:5004${professeurAModifier.image}`} 
                 alt="Image actuelle" 
                 className="image-preview"
                 style={{width: '50px', height: '50px', objectFit: 'cover', borderRadius: '4px'}}

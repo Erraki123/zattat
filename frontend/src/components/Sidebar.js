@@ -8,6 +8,9 @@ import {
   BookOpen,
   CreditCard,
   Plus,
+  AlertTriangle,
+  Wallet,
+  FileText,
   Calendar,
   ClipboardList,
   LogOut,
@@ -77,8 +80,8 @@ const Sidebar = ({ onLogout }) => {
       icon:  Shield,
 
     }, {
-      path: '/liste-cours',
-      label: 'Cours',
+      path: '/liste-classe',
+      label: 'classe',
       icon: BookOpen
     },
     {
@@ -104,6 +107,12 @@ const Sidebar = ({ onLogout }) => {
       icon: CreditCard
     },
    
+    {
+      path: '/paiements-exp',
+      label: 'Paiementsexp',
+      icon:  AlertTriangle
+
+    },
         {
       path: '/admin/seances',
       label: 'Séances',
@@ -139,12 +148,19 @@ const Sidebar = ({ onLogout }) => {
       icon: Newspaper
 
     },
-    
-    {
-      path: '/admin/qr-planning',
-      label: 'QR Planning',
-      icon: QrCode
+ 
+     {
+      path: '/admin/Bulletin',
+      label: 'Bulletin',
+      icon: FileText
     }
+    ,
+     {
+      path: '/admin/Manager',
+      label: 'Manager',
+      icon: Wallet
+    }
+ 
   ];
 
   // Utiliser location.pathname au lieu d'un state local
@@ -159,7 +175,8 @@ const Sidebar = ({ onLogout }) => {
 
   return (
     <div>
-      <style jsx>{`
+ 
+ <style jsx>{`
         /* Variables CSS */
         :root {
           --sidebar-width: 280px;
@@ -187,11 +204,11 @@ const Sidebar = ({ onLogout }) => {
           box-sizing: border-box;
         }
 
-        /* Toggle Button - Toujours visible */
+        /* Toggle Button - Positionné en dehors de la sidebar */
         .sidebar-toggle {
           position: fixed;
           top: 20px;
-          left: 20px;
+          left: ${isOpen ? 'calc(var(--sidebar-width) + 20px)' : '20px'};
           z-index: 1001;
           background: var(--primary-color);
           color: white;
@@ -206,6 +223,13 @@ const Sidebar = ({ onLogout }) => {
           justify-content: center;
           width: 48px;
           height: 48px;
+        }
+
+        /* Sur mobile, le bouton reste à gauche */
+        @media (max-width: 768px) {
+          .sidebar-toggle {
+            left: 20px !important;
+          }
         }
 
         .sidebar-toggle:hover {
@@ -554,6 +578,8 @@ const Sidebar = ({ onLogout }) => {
           animation: fadeIn 0.3s ease-out;
         }
       `}</style>
+
+
 
       {/* Toggle Button - Toujours visible */}
       <button

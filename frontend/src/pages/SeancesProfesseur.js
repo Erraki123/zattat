@@ -48,7 +48,7 @@ const SeancesProfesseur = () => {
           return;
         }
 
-        const res = await fetch('http://localhost:5000/api/seances/professeur', {
+        const res = await fetch('http://195.179.229.230:5004/api/seances/professeur', {
           headers: {
             Authorization: `Bearer ${token}`
           }
@@ -432,7 +432,7 @@ const SeancesProfesseur = () => {
           <div style={styles.loading}>
             <div>Chargement de votre emploi du temps...</div>
             <div style={{ marginTop: '10px', fontSize: '14px' }}>
-              Récupération de vos cours depuis la base de données
+              Récupération de vos classe depuis la base de données
             </div>
           </div>
         </div>
@@ -449,7 +449,7 @@ const SeancesProfesseur = () => {
         <div style={styles.header}>
           <h1 style={{ margin: 0, fontSize: '1.8rem', color: '#1f2937' }}>
             <GraduationCap size={24} style={{ verticalAlign: 'middle', marginRight: '10px' }} />
-            Mes Cours - Emploi du Temps
+            Mes Classes - Emploi du Temps
           </h1>
         </div>
 
@@ -481,7 +481,7 @@ const SeancesProfesseur = () => {
             <div style={styles.statNumber}>{stats.totalCours}</div>
             <div style={styles.statLabel}>
               <Book size={16} style={{ verticalAlign: 'middle', marginRight: '5px' }} />
-              Cours différents
+              Classes différents
             </div>
           </div>
           <div style={styles.statCard}>

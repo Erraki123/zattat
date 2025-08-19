@@ -42,7 +42,7 @@ const AjouterPresence = () => {
           return;
         }
 
-        const res = await axios.get('http://localhost:5000/api/professeur/mes-cours', {
+        const res = await axios.get('http://195.179.229.230:5004/api/professeur/mes-cours', {
           headers: { Authorization: `Bearer ${token}` }
         });
 
@@ -269,7 +269,7 @@ const AjouterPresence = () => {
 
     try {
       const token = localStorage.getItem('token');
-      const res = await axios.get('http://localhost:5000/api/etudiants', {
+      const res = await axios.get('http://195.179.229.230:5004/api/etudiants', {
         headers: { Authorization: `Bearer ${token}` },
       });
 
@@ -314,7 +314,7 @@ const AjouterPresence = () => {
 
     try {
       for (const pres of presences) {
-        await axios.post('http://localhost:5000/api/presences', {
+        await axios.post('http://195.179.229.230:5004/api/presences', {
           etudiant: pres.etudiant,
           cours: selectedCours,
           dateSession,
@@ -391,14 +391,14 @@ const AjouterPresence = () => {
                 {/* En-tête colonne gauche */}
                 <div style={styles.columnHeader}>
                   <BookOpen style={styles.columnIcon} />
-                  <h3 style={styles.columnTitle}>Informations du cours</h3>
+                  <h3 style={styles.columnTitle}>Informations du classe</h3>
                 </div>
                 
                 {/* Sélection du cours */}
                 <div style={styles.formGroup}>
                   <label style={styles.label}>
                     <BookOpen style={styles.labelIcon} />
-                    Sélectionner un cours
+                    Sélectionner un classe
                   </label>
                   <select 
                     style={styles.select} 
@@ -407,7 +407,7 @@ const AjouterPresence = () => {
                     required
                     className="form-select"
                   >
-                    <option value="">Choisir un cours...</option>
+                    <option value="">Choisir un classe...</option>
                     {cours.map(c => (
                       <option key={c._id} value={c.nom}>{c.nom}</option>
                     ))}

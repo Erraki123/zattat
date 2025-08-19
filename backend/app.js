@@ -7,8 +7,11 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const fs = require('fs');
 const Actualite = require('./models/Actualite');
-
+const Commercial = require('./models/commercialModel');
+const Bulletin = require('./models/Bulletin'); // Ajustez le chemin selon votre structure
 const { NotificationSupprimee, Configuration } = require('./models/notificationModel');
+const authPaiementManager = require('./middlewares/authPaiementManager');
+const authAdminOrPaiementManager = require('./middlewares/authAdminOrPaiementManager');
 
 const ContactMessage = require('./models/contactModel');
 const Activity = require('./models/Activity');
@@ -21,7 +24,6 @@ const Rappel = require('./models/RappelPaiement');
 const QrWeekPlanning = require('./models/QrWeekPlanning');
 const QrSession = require('./models/QrSession');
 const Cours = require('./models/coursModel');
-const Paiement = require('./models/paiementModel'); // تأكد أنك قمت بإنشاء الملف
 const Evenement = require('./models/evenementModel');
 const Presence = require('./models/presenceModel');
 const Professeur = require('./models/professeurModel'); // تأكد أنك أنشأت هذا الملف
@@ -30,6 +32,9 @@ const authProfesseur = require('./middlewares/authProfesseur');
 const authEtudiant = require('./middlewares/authEtudiant');
 const Document = require('./models/documentModel');
 const Exercice = require('./models/exerciceModel');
+const Paiement = require('./models/paiementModel'); // تأكد أنك قمت بإنشاء الملف
+// Ajoutez cette ligne avec vos autres imports de modèles
+const PaiementManager = require('./models/paiementManagerModel'); // Ajustez le chemin selon votre structure
 const Message = require('./models/messageModel');
 const Seance = require('./models/Seance');
 
@@ -176,48 +181,187 @@ app.post('/api/documents', (req, res, next) => {
 
 // ✅ Login Admin
 app.post('/api/login', async (req, res) => {
-  const { email, motDePasse } = req.body;
+  try {
+    console.log('🔐 Tentative de connexion reçue');
+    console.log('📧 Email:', req.body.email);
+    console.log('🔑 Password provided:', !!req.body.motDePasse);
+    
+    const { email, motDePasse } = req.body;
 
-  // ✅ Essayer comme admin
-  const admin = await Admin.findOne({ email });
-  if (admin && await bcrypt.compare(motDePasse, admin.motDePasse)) {
-    const token = jwt.sign({ id: admin._id, role: 'admin' }, 'jwt_secret_key', { expiresIn: '7d' });
-    return res.json({ user: admin, token, role: 'admin' });
+    // ✅ Validation des données d'entrée
+    if (!email || !motDePasse) {
+      console.log('❌ Données manquantes');
+      return res.status(400).json({ 
+        message: 'Email et mot de passe sont requis' 
+      });
+    }
+
+    // Normaliser l'email
+    const normalizedEmail = email.toLowerCase().trim();
+    console.log('📧 Email normalisé:', normalizedEmail);
+
+    // ✅ Essayer comme admin
+    console.log('🔍 Recherche admin...');
+    const admin = await Admin.findOne({ email: normalizedEmail });
+    console.log('👤 Admin trouvé:', !!admin);
+    
+    if (admin && await bcrypt.compare(motDePasse, admin.motDePasse)) {
+      console.log('✅ Admin authentifié avec succès');
+      const token = jwt.sign(
+        { id: admin._id, role: 'admin' }, 
+        'jwt_secret_key', 
+        { expiresIn: '7d' }
+      );
+      
+      // Ne pas retourner le mot de passe
+      const adminSafe = { ...admin.toObject() };
+      delete adminSafe.motDePasse;
+      
+      return res.json({ 
+        user: adminSafe, 
+        token, 
+        role: 'admin' 
+      });
+    }
+
+    // ✅ Essayer comme gestionnaire de paiement
+    console.log('🔍 Recherche gestionnaire de paiement...');
+    const paiementManager = await PaiementManager.findOne({ email: normalizedEmail });
+    console.log('💳 PaiementManager trouvé:', !!paiementManager);
+    
+    if (paiementManager) {
+      console.log('🔐 Vérification mot de passe gestionnaire...');
+      const passwordMatch = await paiementManager.comparePassword(motDePasse);
+      console.log('✅ Password match:', passwordMatch);
+      
+      if (passwordMatch) {
+        if (!paiementManager.actif) {
+          console.log('❌ Gestionnaire inactif');
+          return res.status(403).json({ 
+            message: '⛔ Votre compte gestionnaire est inactif. Contactez l\'administration.' 
+          });
+        }
+
+        console.log('✅ Gestionnaire authentifié avec succès');
+        
+        // Mise à jour de lastSeen
+        paiementManager.lastSeen = new Date();
+        await paiementManager.save();
+
+        const token = jwt.sign(
+          { id: paiementManager._id, role: 'paiement_manager' }, 
+          'jwt_secret_key', 
+          { expiresIn: '7d' }
+        );
+        
+        // Utiliser la méthode toSafeObject si elle existe
+        const managerSafe = paiementManager.toSafeObject ? 
+          paiementManager.toSafeObject() : 
+          (() => {
+            const obj = paiementManager.toObject();
+            delete obj.motDePasse;
+            return obj;
+          })();
+
+        return res.json({ 
+          user: managerSafe, 
+          token, 
+          role: 'paiement_manager' 
+        });
+      }
+    }
+
+    // ✅ Essayer comme professeur (si le modèle existe)
+    if (typeof Professeur !== 'undefined') {
+      console.log('🔍 Recherche professeur...');
+      const professeur = await Professeur.findOne({ email: normalizedEmail });
+      console.log('👨‍🏫 Professeur trouvé:', !!professeur);
+      
+      if (professeur && await professeur.comparePassword(motDePasse)) {
+        if (!professeur.actif) {
+          return res.status(403).json({ 
+            message: '⛔️ Votre compte est inactif. Veuillez contacter l\'administration.' 
+          });
+        }
+
+        console.log('✅ Professeur authentifié avec succès');
+
+        // Mise à jour de lastSeen
+        professeur.lastSeen = new Date();
+        await professeur.save();
+
+        const token = jwt.sign(
+          { id: professeur._id, role: 'prof' }, 
+          'jwt_secret_key', 
+          { expiresIn: '7d' }
+        );
+        
+        const professeurSafe = professeur.toSafeObject ? 
+          professeur.toSafeObject() : 
+          (() => {
+            const obj = professeur.toObject();
+            delete obj.motDePasse;
+            return obj;
+          })();
+
+        return res.json({ 
+          user: professeurSafe, 
+          token, 
+          role: 'prof' 
+        });
+      }
+    }
+
+    // ✅ Essayer comme étudiant (si le modèle existe)
+    if (typeof Etudiant !== 'undefined') {
+      console.log('🔍 Recherche étudiant...');
+      const etudiant = await Etudiant.findOne({ email: normalizedEmail });
+      console.log('🎓 Etudiant trouvé:', !!etudiant);
+      
+      if (etudiant && await bcrypt.compare(motDePasse, etudiant.motDePasse)) {
+        if (!etudiant.actif) {
+          return res.status(403).json({ 
+            message: '⛔️ Votre compte est désactivé. Contactez l\'administration.' 
+          });
+        }
+
+        console.log('✅ Etudiant authentifié avec succès');
+
+        // Mise à jour de lastSeen
+        etudiant.lastSeen = new Date();
+        await etudiant.save();
+
+        const token = jwt.sign(
+          { id: etudiant._id, role: 'etudiant' }, 
+          'jwt_secret_key', 
+          { expiresIn: '7d' }
+        );
+        
+        const etudiantSafe = { ...etudiant.toObject() };
+        delete etudiantSafe.motDePasse;
+
+        return res.json({ 
+          user: etudiantSafe, 
+          token, 
+          role: 'etudiant' 
+        });
+      }
+    }
+
+    // ❌ Si aucun ne correspond
+    console.log('❌ Aucune correspondance trouvée');
+    return res.status(401).json({ 
+      message: 'Email ou mot de passe incorrect' 
+    });
+
+  } catch (error) {
+    console.error('💥 Erreur lors de la connexion:', error);
+    console.error('Stack trace:', error.stack);
+    return res.status(500).json({ 
+      message: 'Erreur serveur lors de la connexion',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
   }
-
-  // ✅ Essayer comme professeur
-const professeur = await Professeur.findOne({ email });
-if (professeur && await professeur.comparePassword(motDePasse)) {
-  if (!professeur.actif) {
-    return res.status(403).json({ message: '⛔️ Votre compte est inactif. Veuillez contacter l’administration.' });
-  }
-
-  // ✅ Mise à jour de lastSeen
-  professeur.lastSeen = new Date();
-  await professeur.save();
-
-  const token = jwt.sign({ id: professeur._id, role: 'prof' }, 'jwt_secret_key', { expiresIn: '7d' });
-  return res.json({ user: professeur, token, role: 'prof' });
-}
-
-
-
-  // ✅ Essayer comme étudiant
-const etudiant = await Etudiant.findOne({ email });
-if (etudiant && await bcrypt.compare(motDePasse, etudiant.motDePasse)) {
-  if (!etudiant.actif) {
-    return res.status(403).json({ message: '⛔️ Votre compte est désactivé. Contactez l’administration.' });
-  }
-etudiant.lastSeen = new Date();
-  await etudiant.save();
-
-  const token = jwt.sign({ id: etudiant._id, role: 'etudiant' }, 'jwt_secret_key', { expiresIn: '7d' });
-  return res.json({ user: etudiant, token, role: 'etudiant' });
-}
-
-
-  // ❌ Si aucun ne correspond
-  return res.status(401).json({ message: 'Email ou mot de passe incorrect' });
 });
 
 app.get('/api/etudiant/notifications', authEtudiant, async (req, res) => {
@@ -324,52 +468,639 @@ app.post('/api/admin/logout', (req, res) => {
 });
 // Ajouter un étudiant
 
+// ===== ROUTE POST - CRÉATION D'UN ÉTUDIANT =====
 app.post('/api/etudiants', authAdmin, upload.single('image'), async (req, res) => {
   try {
-    const { nomComplet, genre, dateNaissance, telephone, email, motDePasse } = req.body;
+    const {
+      nomComplet,
+      genre,
+      dateNaissance,
+      telephoneEtudiant,
+      telephonePere,
+      telephoneMere,
+      codeMassar,
+      adresse,
+      email,
+      motDePasse,
+      // NOUVEAUX CHAMPS DE PAIEMENT
+      prixTotal,
+      paye,
+      pourcentageBourse,
+      typePaiement,
+      anneeScolaire
+    } = req.body;
+
     let { cours, actif } = req.body;
 
-    // التحقق من أن البريد الإلكتروني غير مستخدم
+    // ===== VALIDATION DES CHAMPS OBLIGATOIRES =====
+    if (!nomComplet || !genre || !dateNaissance || !telephoneEtudiant || !codeMassar || !email || !motDePasse || !anneeScolaire) {
+      return res.status(400).json({
+        message: 'Les champs nomComplet, genre, dateNaissance, telephoneEtudiant, codeMassar, email, motDePasse et anneeScolaire sont obligatoires'
+      });
+    }
+
+    // Validation de l'email
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      return res.status(400).json({ message: 'Format d\'email invalide' });
+    }
+
+    // Validation du mot de passe
+    if (motDePasse.length < 6) {
+      return res.status(400).json({ message: 'Le mot de passe doit contenir au moins 6 caractères' });
+    }
+
+    // Validation de l'année scolaire
+    const anneeScolaireRegex = /^\d{4}\/\d{4}$/;
+    if (!anneeScolaireRegex.test(anneeScolaire)) {
+      return res.status(400).json({ message: 'L\'année scolaire doit être au format YYYY/YYYY (ex: 2025/2026)' });
+    }
+
+    // ===== VÉRIFICATION D'UNICITÉ =====
+    
+    // Vérifier que l'email n'est pas déjà utilisé
     const existe = await Etudiant.findOne({ email });
     if (existe) {
       return res.status(400).json({ message: 'Email déjà utilisé par un autre étudiant' });
     }
 
-    // تأكد أن cours عبارة عن مصفوفة
+    // Vérifier que le Code Massar n'est pas déjà utilisé
+    const massarExiste = await Etudiant.findOne({ codeMassar });
+    if (massarExiste) {
+      return res.status(400).json({ message: 'Code Massar déjà utilisé par un autre étudiant' });
+    }
+
+    // ===== TRAITEMENT DES DONNÉES =====
+    
+    // S'assurer que cours est un tableau
     if (typeof cours === 'string') {
       cours = [cours];
     }
 
-    // تحويل actif إلى Boolean
-    const actifBool = actif === 'true' || actif === true;
+    // Fonctions utilitaires pour la conversion des données
+    const toBool = (v) => v === 'true' || v === true;
+    const toNumber = (v) => {
+      if (!v || v === '') return 0;
+      const n = parseFloat(v);
+      return isNaN(n) ? 0 : n;
+    };
 
-    // مسار الصورة
+    const toDate = (d) => {
+      if (!d) return null;
+      const date = new Date(d);
+      return isNaN(date.getTime()) ? null : date;
+    };
+
+    // Conversion des booléens
+    const actifBool = toBool(actif);
+    const payeBool = toBool(paye);
+
+    // Conversion des nombres
+    const prixTotalNum = toNumber(prixTotal);
+    const pourcentageBourseNum = toNumber(pourcentageBourse);
+
+    // Validation du pourcentage de bourse
+    if (pourcentageBourseNum < 0 || pourcentageBourseNum > 100) {
+      return res.status(400).json({ message: 'Le pourcentage de bourse doit être entre 0 et 100' });
+    }
+
+    // Validation du prix total
+    if (prixTotalNum < 0) {
+      return res.status(400).json({ message: 'Le prix total ne peut pas être négatif' });
+    }
+
+    // Validation du type de paiement
+    const typesValides = ['Cash', 'Virement', 'Chèque', 'En ligne'];
+    if (typePaiement && !typesValides.includes(typePaiement)) {
+      return res.status(400).json({ 
+        message: `Type de paiement invalide. Types valides: ${typesValides.join(', ')}` 
+      });
+    }
+
+    // Conversion de la date de naissance
+    const dateNaissanceFormatted = toDate(dateNaissance);
+    if (!dateNaissanceFormatted) {
+      return res.status(400).json({ message: 'Format de date de naissance invalide' });
+    }
+
+    // ===== TRAITEMENT DE L'IMAGE =====
+    
+    // Chemin de l'image
     const imagePath = req.file ? `/uploads/${req.file.filename}` : '';
 
-    // تشفير كلمة المرور
+    // ===== HACHAGE DU MOT DE PASSE =====
+    
+    // Hachage du mot de passe
     const hashedPassword = await bcrypt.hash(motDePasse, 10);
 
-    const etudiant = new Etudiant({
-      nomComplet,
+    // ===== CRÉATION DE L'ÉTUDIANT =====
+    
+    // Création du nouvel étudiant avec tous les champs
+    const etudiantData = {
+      // Champs de base
+      nomComplet: nomComplet.trim(),
       genre,
-      dateNaissance: new Date(dateNaissance),
-      telephone,
-      email,
+      dateNaissance: dateNaissanceFormatted,
+      telephoneEtudiant: telephoneEtudiant.trim(),
+      telephonePere: telephonePere?.trim() || '',
+      telephoneMere: telephoneMere?.trim() || '',
+      codeMassar: codeMassar.trim(),
+      adresse: adresse?.trim() || '',
+      email: email.toLowerCase().trim(),
       motDePasse: hashedPassword,
-      cours,
+      cours: cours || [],
       image: imagePath,
       actif: actifBool,
-      creeParAdmin: req.adminId
+      creeParAdmin: req.adminId,
+      
+      // NOUVEAUX CHAMPS DE PAIEMENT
+      prixTotal: prixTotalNum,
+      paye: payeBool,
+      pourcentageBourse: pourcentageBourseNum,
+      typePaiement: typePaiement || 'Cash',
+      anneeScolaire: anneeScolaire.trim()
+    };
+
+    const etudiant = new Etudiant(etudiantData);
+    const etudiantSauve = await etudiant.save();
+
+    // Préparer la réponse sans le mot de passe
+    const etudiantResponse = etudiantSauve.toObject();
+    delete etudiantResponse.motDePasse;
+
+    res.status(201).json({
+      message: 'Étudiant créé avec succès',
+      etudiant: etudiantResponse,
+      // Informations supplémentaires sur le paiement
+      infosPaiement: {
+        montantTotal: prixTotalNum,
+        montantBourse: (prixTotalNum * pourcentageBourseNum) / 100,
+        montantAPayer: prixTotalNum - ((prixTotalNum * pourcentageBourseNum) / 100),
+        statutPaiement: payeBool ? 'Payé' : (prixTotalNum === 0 ? 'Gratuit' : 'En attente')
+      }
     });
 
-    await etudiant.save();
-    res.status(201).json(etudiant);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error('❌ Erreur ajout étudiant:', err);
+    
+    // Gestion des erreurs de validation Mongoose
+    if (err.name === 'ValidationError') {
+      const errors = Object.values(err.errors).map(e => e.message);
+      return res.status(400).json({ 
+        message: 'Erreur de validation', 
+        errors 
+      });
+    }
+    
+    // Gestion des erreurs de duplicata (index unique)
+    if (err.code === 11000) {
+      const field = Object.keys(err.keyPattern)[0];
+      const fieldNames = {
+        email: 'Email',
+        codeMassar: 'Code Massar'
+      };
+      return res.status(400).json({ 
+        message: `${fieldNames[field] || field} déjà utilisé par un autre étudiant` 
+      });
+    }
+
+    res.status(500).json({
+      message: 'Erreur interne du serveur',
+      error: process.env.NODE_ENV === 'development' ? err.message : 'Une erreur est survenue'
+    });
+  }
+});
+
+// ===== ROUTE PUT - MISE À JOUR D'UN ÉTUDIANT =====
+app.put('/api/etudiants/:id', authAdmin, upload.single('image'), async (req, res) => {
+  try {
+    const {
+      nomComplet,
+      genre,
+      dateNaissance,
+      telephoneEtudiant,
+      telephonePere,
+      telephoneMere,
+      codeMassar,
+      adresse,
+      email,
+      motDePasse,
+      // NOUVEAUX CHAMPS DE PAIEMENT
+      prixTotal,
+      paye,
+      pourcentageBourse,
+      typePaiement,
+      anneeScolaire
+    } = req.body;
+
+    let { cours, actif } = req.body;
+
+    // ===== VALIDATION DES CHAMPS OBLIGATOIRES =====
+    if (!nomComplet || !genre || !dateNaissance || !telephoneEtudiant || !codeMassar || !email || !anneeScolaire) {
+      return res.status(400).json({
+        message: 'Les champs nomComplet, genre, dateNaissance, telephoneEtudiant, codeMassar, email et anneeScolaire sont obligatoires'
+      });
+    }
+
+    // Validation de l'email
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      return res.status(400).json({ message: 'Format d\'email invalide' });
+    }
+
+    // Validation de l'année scolaire
+    const anneeScolaireRegex = /^\d{4}\/\d{4}$/;
+    if (!anneeScolaireRegex.test(anneeScolaire)) {
+      return res.status(400).json({ message: 'L\'année scolaire doit être au format YYYY/YYYY (ex: 2025/2026)' });
+    }
+
+    // ===== VÉRIFICATION D'UNICITÉ (sauf pour l'étudiant actuel) =====
+    
+    // Vérifier que l'email n'est pas déjà utilisé par un autre étudiant
+    const existe = await Etudiant.findOne({ 
+      email, 
+      _id: { $ne: req.params.id } 
+    });
+    if (existe) {
+      return res.status(400).json({ message: 'Email déjà utilisé par un autre étudiant' });
+    }
+
+    // Vérifier que le Code Massar n'est pas déjà utilisé par un autre étudiant
+    const massarExiste = await Etudiant.findOne({ 
+      codeMassar, 
+      _id: { $ne: req.params.id } 
+    });
+    if (massarExiste) {
+      return res.status(400).json({ message: 'Code Massar déjà utilisé par un autre étudiant' });
+    }
+
+    // ===== TRAITEMENT DES DONNÉES =====
+    
+    // S'assurer que cours est un tableau
+    if (typeof cours === 'string') {
+      cours = [cours];
+    }
+
+    // Fonctions utilitaires pour la conversion des données
+    const toBool = (v) => v === 'true' || v === true;
+    const toNumber = (v) => {
+      if (!v || v === '') return 0;
+      const n = parseFloat(v);
+      return isNaN(n) ? 0 : n;
+    };
+
+    const toDate = (d) => {
+      if (!d) return null;
+      const date = new Date(d);
+      return isNaN(date.getTime()) ? null : date;
+    };
+
+    // Conversion des booléens
+    const actifBool = toBool(actif);
+    const payeBool = toBool(paye);
+
+    // Conversion des nombres
+    const prixTotalNum = toNumber(prixTotal);
+    const pourcentageBourseNum = toNumber(pourcentageBourse);
+
+    // Validation du pourcentage de bourse
+    if (pourcentageBourseNum < 0 || pourcentageBourseNum > 100) {
+      return res.status(400).json({ message: 'Le pourcentage de bourse doit être entre 0 et 100' });
+    }
+
+    // Validation du prix total
+    if (prixTotalNum < 0) {
+      return res.status(400).json({ message: 'Le prix total ne peut pas être négatif' });
+    }
+
+    // Validation du type de paiement
+    const typesValides = ['Cash', 'Virement', 'Chèque', 'En ligne'];
+    if (typePaiement && !typesValides.includes(typePaiement)) {
+      return res.status(400).json({ 
+        message: `Type de paiement invalide. Types valides: ${typesValides.join(', ')}` 
+      });
+    }
+
+    // Conversion de la date de naissance
+    const dateNaissanceFormatted = toDate(dateNaissance);
+    if (!dateNaissanceFormatted) {
+      return res.status(400).json({ message: 'Format de date de naissance invalide' });
+    }
+
+    // ===== PRÉPARATION DES DONNÉES DE MISE À JOUR =====
+    
+    const updateData = {
+      // Champs de base
+      nomComplet: nomComplet.trim(),
+      genre,
+      dateNaissance: dateNaissanceFormatted,
+      telephoneEtudiant: telephoneEtudiant.trim(),
+      telephonePere: telephonePere?.trim() || '',
+      telephoneMere: telephoneMere?.trim() || '',
+      codeMassar: codeMassar.trim(),
+      adresse: adresse?.trim() || '',
+      email: email.toLowerCase().trim(),
+      cours: cours || [],
+      actif: actifBool,
+      
+      // NOUVEAUX CHAMPS DE PAIEMENT
+      prixTotal: prixTotalNum,
+      paye: payeBool,
+      pourcentageBourse: pourcentageBourseNum,
+      typePaiement: typePaiement || 'Cash',
+      anneeScolaire: anneeScolaire.trim()
+    };
+
+    // ===== TRAITEMENT DE L'IMAGE =====
+    
+    // Si une nouvelle image est fournie
+    if (req.file) {
+      updateData.image = `/uploads/${req.file.filename}`;
+    }
+
+    // ===== TRAITEMENT DU MOT DE PASSE =====
+    
+    // Si un nouveau mot de passe est fourni
+    if (motDePasse && motDePasse.trim() !== '') {
+      // Validation du mot de passe
+      if (motDePasse.length < 6) {
+        return res.status(400).json({ message: 'Le mot de passe doit contenir au moins 6 caractères' });
+      }
+      const hashedPassword = await bcrypt.hash(motDePasse, 10);
+      updateData.motDePasse = hashedPassword;
+    }
+
+    // ===== MISE À JOUR DE L'ÉTUDIANT =====
+    
+    const updated = await Etudiant.findByIdAndUpdate(
+      req.params.id, 
+      updateData, 
+      {
+        new: true,
+        runValidators: true
+      }
+    ).select('-motDePasse'); // Ne pas retourner le mot de passe
+
+    if (!updated) {
+      return res.status(404).json({ message: 'Étudiant non trouvé' });
+    }
+
+    // Préparer la réponse avec les informations de paiement
+    const etudiantResponse = updated.toObject();
+
+    res.json({
+      message: 'Étudiant mis à jour avec succès',
+      etudiant: etudiantResponse,
+      // Informations supplémentaires sur le paiement
+      infosPaiement: {
+        montantTotal: prixTotalNum,
+        montantBourse: (prixTotalNum * pourcentageBourseNum) / 100,
+        montantAPayer: prixTotalNum - ((prixTotalNum * pourcentageBourseNum) / 100),
+        statutPaiement: payeBool ? 'Payé' : (prixTotalNum === 0 ? 'Gratuit' : 'En attente')
+      }
+    });
+
+  } catch (err) {
+    console.error('❌ Erreur mise à jour étudiant:', err);
+    
+    // Gestion des erreurs de validation Mongoose
+    if (err.name === 'ValidationError') {
+      const errors = Object.values(err.errors).map(e => e.message);
+      return res.status(400).json({ 
+        message: 'Erreur de validation', 
+        errors 
+      });
+    }
+    
+    // Gestion des erreurs de duplicata (index unique)
+    if (err.code === 11000) {
+      const field = Object.keys(err.keyPattern)[0];
+      const fieldNames = {
+        email: 'Email',
+        codeMassar: 'Code Massar'
+      };
+      return res.status(400).json({ 
+        message: `${fieldNames[field] || field} déjà utilisé par un autre étudiant` 
+      });
+    }
+
+    res.status(500).json({
+      message: 'Erreur lors de la mise à jour',
+      error: process.env.NODE_ENV === 'development' ? err.message : 'Une erreur est survenue'
+    });
   }
 });
 
 
+
+
+
+app.put('/api/bulletins/:id', authProfesseur, async (req, res) => {
+  try {
+    const { etudiant, cours, semestre, notes, remarque } = req.body;
+    
+    // Calcul de la moyenne
+    let total = 0;
+    let coefTotal = 0;
+    for (let n of notes) {
+      total += n.note * n.coefficient;
+      coefTotal += n.coefficient;
+    }
+    const moyenne = coefTotal > 0 ? (total / coefTotal).toFixed(2) : null;
+    
+    const bulletin = await Bulletin.findOneAndUpdate(
+      { _id: req.params.id, professeur: req.professeurId },
+      {
+        etudiant,
+        cours,
+        semestre,
+        notes,
+        remarque,
+        moyenneFinale: moyenne
+      },
+      { new: true }
+    );
+    
+    if (!bulletin) {
+      return res.status(404).json({ message: 'Bulletin non trouvé' });
+    }
+    
+    res.json({ message: '✅ Bulletin modifié', bulletin });
+  } catch (err) {
+    res.status(500).json({ message: '❌ Erreur serveur', error: err.message });
+  }
+});
+
+// Route DELETE pour supprimer un bulletin
+app.delete('/api/bulletins/:id', authProfesseur, async (req, res) => {
+  try {
+    const bulletin = await Bulletin.findOneAndDelete({
+      _id: req.params.id,
+      professeur: req.professeurId
+    });
+    
+    if (!bulletin) {
+      return res.status(404).json({ message: 'Bulletin non trouvé' });
+    }
+    
+    res.json({ message: '✅ Bulletin supprimé' });
+  } catch (err) {
+    res.status(500).json({ message: '❌ Erreur serveur', error: err.message });
+  }
+});
+
+
+
+app.post('/api/bulletins', authProfesseur, async (req, res) => {
+  try {
+    const { etudiant, cours, semestre, notes, remarque } = req.body;
+
+    // ✅ Calcul de la moyenne finale
+    let total = 0;
+    let coefTotal = 0;
+    for (let n of notes) {
+      total += n.note * n.coefficient;
+      coefTotal += n.coefficient;
+    }
+
+    const moyenne = coefTotal > 0 ? (total / coefTotal).toFixed(2) : null;
+
+    const bulletin = new Bulletin({
+      etudiant,
+      professeur: req.professeurId,
+      cours,
+      semestre,
+      notes,
+      remarque,
+      moyenneFinale: moyenne
+    });
+
+    await bulletin.save();
+    res.status(201).json({ message: '✅ Bulletin créé', bulletin });
+
+  } catch (err) {
+    res.status(500).json({ message: '❌ Erreur serveur', error: err.message });
+  }
+});
+
+app.get('/api/bulletins/etudiant/me', authEtudiant, async (req, res) => {
+  try {
+    // 1. Vérifier que l'étudiant existe toujours
+    const etudiantExists = await Etudiant.findById(req.etudiantId);
+    if (!etudiantExists) {
+      return res.status(404).json({
+        success: false,
+        message: "Étudiant non trouvé"
+      });
+    }
+
+    // 2. Récupérer les bulletins avec une structure garantie
+    const bulletins = await Bulletin.find({ etudiant: req.etudiantId })
+      .populate('etudiant', 'prenom nomDeFamille')
+      .populate('professeur', 'nom prenom')
+      .lean(); // Convertit en objet JS simple
+
+    // 3. Formater la réponse de manière fiable
+    const response = {
+      success: true,
+      count: bulletins.length,
+      bulletins: bulletins.map(b => ({
+        _id: b._id,
+        cours: b.cours || 'Non spécifié',
+        semestre: b.semestre || 'Année',
+        notes: Array.isArray(b.notes) ? b.notes : [],
+        moyenneFinale: b.moyenneFinale ?? null,
+        remarque: b.remarque || '',
+        createdAt: b.createdAt,
+        etudiant: {
+          _id: b.etudiant?._id,
+          nomComplet: b.etudiant 
+            ? `${b.etudiant.prenom || ''} ${b.etudiant.nomDeFamille || ''}`.trim() 
+            : 'N/A'
+        },
+        professeur: {
+          _id: b.professeur?._id,
+          nomComplet: b.professeur
+            ? `${b.professeur.prenom || ''} ${b.professeur.nom || ''}`.trim()
+            : 'N/A'
+        }
+      }))
+    };
+
+    // 4. Renvoyer même si tableau vide (pour éviter les erreurs front)
+    res.json(response);
+
+  } catch (err) {
+    console.error('Erreur bulletins:', {
+      error: err.message,
+      etudiantId: req.etudiantId,
+      stack: process.env.NODE_ENV === 'development' ? err.stack : undefined
+    });
+
+    res.status(500).json({
+      success: false,
+      message: "Erreur serveur",
+      error: process.env.NODE_ENV === 'development' ? err.message : undefined
+    });
+  }
+});
+
+app.get('/api/bulletins/professeur', authProfesseur, async (req, res) => {
+  try {
+    const bulletins = await Bulletin.find({ professeur: req.professeurId })
+      .populate({
+        path: 'etudiant',
+        select: 'prenom nomDeFamille nomComplet', // Sélection multiple
+        transform: doc => doc ? {
+          _id: doc._id,
+          nomComplet: doc.nomComplet || `${doc.prenom || ''} ${doc.nomDeFamille || ''}`.trim(),
+          prenom: doc.prenom,
+          nomDeFamille: doc.nomDeFamille
+        } : null
+      })
+      .sort({ createdAt: -1 });
+    
+    res.json(bulletins);
+  } catch (error) {
+    console.error('Erreur:', error);
+    res.status(500).json({ message: 'Erreur serveur' });
+  }
+});
+app.get('/api/bulletins', authAdmin, async (req, res) => {
+  try {
+    const bulletins = await Bulletin.find()
+      .populate({
+        path: 'etudiant',
+        select: 'prenom nomDeFamille nomComplet',
+        transform: doc => doc ? {
+          _id: doc._id,
+          nomComplet: doc.nomComplet || `${doc.prenom || ''} ${doc.nomDeFamille || ''}`.trim()
+        } : null
+      })
+      .populate({
+        path: 'professeur',
+        select: 'nomComplet',
+        transform: doc => doc ? {
+          _id: doc._id,
+          nomComplet: `${doc.prenom || ''} ${doc.nom || ''}`.trim()
+        } : null
+      })
+      .sort({ createdAt: -1 });
+
+    res.json(bulletins.map(b => ({
+      ...b.toObject(),
+      // Formatage cohérent
+      etudiantNom: b.etudiant?.nomComplet || 'N/A',
+      professeurNom: b.professeur?.nomComplet || 'N/A'
+    })));
+  } catch (error) {
+    console.error('Erreur admin:', error);
+    res.status(500).json({ 
+      message: 'Erreur lors de la récupération des bulletins',
+      details: error.message 
+    });
+  }
+});
 // Lister tous les étudiants
 app.get('/api/etudiants', authAdmin, async (req, res) => {
   try {
@@ -1444,16 +2175,21 @@ app.post('/api/contact/send', async (req, res) => {
 });
 
 // 🔐 Route protégée - vue admin
-app.get('/api/admin/contact-messages', authAdmin, async (req, res) => {
+app.get('/api/admin/contact-messages', authAdminOrPaiementManager, async (req, res) => {
   try {
+    console.log('User making request:', req.userRole, req.user._id);
     const messages = await ContactMessage.find().sort({ date: -1 });
+    console.log('Messages found:', messages.length);
     res.status(200).json(messages);
   } catch (err) {
     console.error('❌ Erreur récupération messages:', err);
-    res.status(500).json({ message: '❌ Erreur serveur' });
+    res.status(500).json({ 
+      message: '❌ Erreur serveur',
+      error: process.env.NODE_ENV === 'development' ? err.message : undefined
+    });
   }
 });
-app.delete('/api/admin/contact-messages/:id', authAdmin, async (req, res) => {
+app.delete('/api/admin/contact-messages/:id', authAdminOrPaiementManager, async (req, res) => {
   try {
     const { id } = req.params;
 
@@ -1469,239 +2205,8 @@ app.delete('/api/admin/contact-messages/:id', authAdmin, async (req, res) => {
   }
 });
 
-app.post('/api/admin/qr-week-bulk', async (req, res) => {
-  try {
-    const { planning } = req.body;
-
-    if (!Array.isArray(planning) || planning.length === 0) {
-      return res.status(400).json({ message: 'Données de planning manquantes' });
-    }
-
-    const results = [];
-
-    for (const item of planning) {
-      const { jour, periode, cours, matiere, professeur, horaire } = item;
-
-      // ✅ Vérifie que tout est bien fourni, y compris `horaire`
-      if (!jour || !periode || !cours || !matiere || !professeur || !horaire) {
-        continue; // Ignore les lignes incomplètes
-      }
-
-      const existe = await QrWeekPlanning.findOne({
-        jour,
-        periode,
-        cours,
-      });
-
-      if (existe) {
-        existe.matiere = matiere;
-        existe.professeur = professeur;
-        existe.horaire = horaire; // ✅ met à jour aussi l’horaire
-        await existe.save();
-        results.push({ updated: existe._id });
-      } else {
-        const nouv = new QrWeekPlanning({
-          jour,
-          periode,
-          cours,
-          matiere,
-          professeur,
-          horaire // ✅ nouveau champ
-        });
-        await nouv.save();
-        results.push({ created: nouv._id });
-      }
-    }
-
-    res.status(201).json({ message: '✅ Planning enregistré avec succès', details: results });
-  } catch (err) {
-    console.error('❌ Erreur bulk qr-week:', err);
-    res.status(500).json({ message: '❌ Erreur serveur lors de l’enregistrement du planning' });
-  }
-});
-
-
-app.post('/api/qretudiant', authEtudiant, async (req, res) => {
-  try {
-    const etudiant = req.user;
-
-    const niveau = Array.isArray(etudiant.cours) ? etudiant.cours[0] : etudiant.cours;
-
-    const { date, periode } = req.body;
-
-    if (!date || !periode) {
-      return res.status(400).json({ message: 'Date et période requises' });
-    }
-
-    const session = await QrSession.findOne({
-      date,
-      periode,
-      cours: niveau // المقارنة هنا حسب أول مستوى فقط
-    });
-
-    if (!session) {
-      return res.status(404).json({ message: 'Aucune session trouvée pour ce niveau' });
-    }
-
-    res.status(200).json({ message: 'Session trouvée', session });
-
-  } catch (err) {
-    console.error('Erreur dans /api/qretudiant:', err);
-    res.status(500).json({ message: 'Erreur serveur' });
-  }
-});
-
 // backend/app.js ou routes/admin.js
 
-app.post('/api/etudiant/qr-presence', authEtudiant, async (req, res) => {
-  try {
-    const { date, periode, cours, horaire } = req.body;
-
-    // ✅ تحقق من المعطيات الأساسية
-    if (!date || !periode || !cours || !horaire) {
-      return res.status(400).json({ message: '❌ QR invalide - données manquantes' });
-    }
-
-    const now = new Date();
-    const heureActuelle = now.toTimeString().slice(0, 5); // "14:25"
-
-    // ✅ ابحث عن الجلسة في QrSession
-    const session = await QrSession.findOne({ date, periode, cours, horaire }).populate('professeur');
-
-    if (!session) {
-      return res.status(404).json({ message: '❌ QR session non trouvée pour ce cours et horaire' });
-    }
-
-    // ✅ تحقق أن التوقيت الحالي داخل النافذة الزمنية
-    const [startHour, endHour] = horaire.split('-'); // Exemple: '08:00', '10:00'
-    if (heureActuelle < startHour || heureActuelle > endHour) {
-      return res.status(400).json({
-        message: `⛔ Vous êtes hors de la plage horaire autorisée (${horaire})`
-      });
-    }
-
-    // ✅ تحقق من الطالب
-    const etudiant = await Etudiant.findById(req.etudiantId);
-    if (!etudiant) return res.status(404).json({ message: '❌ Étudiant introuvable' });
-
-    const niveauEtudiant = Array.isArray(etudiant.cours) ? etudiant.cours[0] : etudiant.cours;
-    if (!niveauEtudiant || niveauEtudiant !== cours) {
-      return res.status(403).json({ message: `❌ Ce QR n'est pas destiné à votre niveau (${cours})` });
-    }
-
-    // ✅ تحقق من عدم تكرار الحضور في نفس التوقيت
-    const dejaPresente = await Presence.findOne({
-      etudiant: etudiant._id,
-      cours: niveauEtudiant,
-      dateSession: date,
-      periode,
-      heure: horaire // لازم تبحث بنفس `horaire`!
-    });
-
-    if (dejaPresente) {
-      return res.status(400).json({ message: '⚠️ Présence déjà enregistrée pour ce créneau horaire' });
-    }
-
-    // ✅ إنشاء الحضور
-    const presence = new Presence({
-      etudiant: etudiant._id,
-      cours: niveauEtudiant,
-      dateSession: date,
-      periode,
-heure: horaire, // ✅ استخدم التوقيت الرسمي للجلسة
-      present: true,
-      remarque: 'QR auto',
-      matiere: session.matiere || 'Non spécifiée',
-      nomProfesseur: session.professeur?.nom || session.professeur?.nomComplet || 'Non spécifié',
-      creePar: session.professeur?._id || null
-    });
-
-    await presence.save();
-
-    res.status(201).json({ message: '✅ Présence enregistrée avec succès', presence });
-
-  } catch (error) {
-    console.error('❌ Erreur dans qr-presence:', error);
-    res.status(500).json({ message: '❌ Erreur serveur' });
-  }
-});
-
-
-// ✅ Route: Supprimer toutes les QR sessions d'un jour donné
-app.delete('/api/admin/qr-day-delete', authAdmin, async (req, res) => {
-  try {
-    const { date } = req.body;
-    if (!date) {
-      return res.status(400).json({ message: '❌ Date requise pour supprimer les sessions QR' });
-    }
-
-    // ✅ Supprimer les sessions QR de ce jour
-    const deleted = await QrSession.deleteMany({ date });
-
-    // (Optionnel) Supprimer aussi les présences associées à ce jour
-    // await Presence.deleteMany({ dateSession: date });
-
-    res.status(200).json({ message: `✅ ${deleted.deletedCount} sessions QR supprimées pour ${date}` });
-  } catch (error) {
-    console.error('❌ Erreur lors de la suppression des QR sessions:', error);
-    res.status(500).json({ message: '❌ Erreur serveur lors de la suppression' });
-  }
-});
-
-// ✅ Route: Récupérer toutes les sessions QR planifiées pour une date donnée
-app.get('/api/admin/qr-day-sessions', authAdmin, async (req, res) => {
-  try {
-    const { date } = req.query;
-    if (!date) {
-      return res.status(400).json({ message: '❌ Date requise pour obtenir les sessions' });
-    }
-
-    const qrSessions = await QrSession.find({ date }).populate('professeur');
-    res.status(200).json({ qrSessions });
-  } catch (error) {
-    console.error('❌ Erreur lors de la récupération des sessions QR:', error);
-    res.status(500).json({ message: '❌ Erreur serveur' });
-  }
-});
-
-// Modifier une session individuelle
-app.put('/api/admin/qr-session/:id', authAdmin, async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { matiere, professeur, periode, horaire } = req.body;
-    
-    const session = await QrSession.findByIdAndUpdate(id, {
-      matiere,
-      professeur,
-      periode,
-      horaire
-    }, { new: true });
-    
-    if (!session) {
-      return res.status(404).json({ message: 'Session non trouvée' });
-    }
-    
-    res.json({ message: 'Session modifiée avec succès', session });
-  } catch (error) {
-    res.status(500).json({ message: 'Erreur serveur' });
-  }
-});
-
-// Supprimer une session individuelle
-app.delete('/api/admin/qr-session/:id', authAdmin, async (req, res) => {
-  try {
-    const { id } = req.params;
-    const session = await QrSession.findByIdAndDelete(id);
-    
-    if (!session) {
-      return res.status(404).json({ message: 'Session non trouvée' });
-    }
-    
-    res.json({ message: 'Session supprimée avec succès' });
-  } catch (error) {
-    res.status(500).json({ message: 'Erreur serveur' });
-  }
-});
 
 
 // 🔔 إشعارات الأستاذ - الأحداث القادمة فقط
@@ -2147,44 +2652,7 @@ app.get('/api/presences/etudiant/:id', authAdmin, async (req, res) => {
   }
 });
 // ✅ Modifier un étudiant
-app.put('/api/etudiants/:id', authAdmin, upload.single('image'), async (req, res) => {
-  try {
-    const { nomComplet, genre, dateNaissance, telephone, email, motDePasse, actif } = req.body;
-    let cours = req.body.cours;
-    if (typeof cours === 'string') cours = [cours];
-    const actifBool = actif === 'true' || actif === true;
 
-    const updateData = {
-      nomComplet,
-      genre,
-      dateNaissance: new Date(dateNaissance),
-      telephone,
-      email,
-      cours,
-      actif: actifBool
-    };
-
-    // إذا تم رفع صورة جديدة
-    if (req.file) {
-      updateData.image = `/uploads/${req.file.filename}`;
-    }
-
-    // إذا تم إدخال كلمة مرور جديدة
-    if (motDePasse && motDePasse.trim() !== '') {
-      const bcrypt = require('bcryptjs');
-      updateData.motDePasse = await bcrypt.hash(motDePasse, 10);
-    }
-
-    const updated = await Etudiant.findByIdAndUpdate(req.params.id, updateData, {
-      new: true,
-      runValidators: true
-    }).select('-motDePasse'); // ❌ لا نرجع كلمة المرور في النتيجة
-
-    res.json(updated);
-  } catch (err) {
-    res.status(500).json({ message: 'Erreur lors de la mise à jour', error: err.message });
-  }
-});
 
 // Lister les cours
 // Récupérer un seul cours avec détails
@@ -2282,7 +2750,7 @@ app.get('/api/actualites', async (req, res) => {
     res.status(500).json({ message: 'Erreur serveur', error: err.message });
   }
 });
-app.post('/api/actualites', authAdmin, upload.single('image'), async (req, res) => {
+app.post('/api/actualites', authAdminOrPaiementManager, upload.single('image'), async (req, res) => {
   try {
     const { title, excerpt, content, category, author, date, tags, type, isPinned } = req.body;
 
@@ -2305,7 +2773,7 @@ app.post('/api/actualites', authAdmin, upload.single('image'), async (req, res) 
     res.status(400).json({ message: 'Erreur ajout actualité', error: err.message });
   }
 });
-app.delete('/api/actualites/:id', authAdmin, async (req, res) => {
+app.delete('/api/actualites/:id', authAdminOrPaiementManager, async (req, res) => {
   try {
     const deleted = await Actualite.findByIdAndDelete(req.params.id);
     if (!deleted) {
@@ -2317,7 +2785,7 @@ app.delete('/api/actualites/:id', authAdmin, async (req, res) => {
   }
 });
 // ✏️ تعديل actualité
-app.put('/api/actualites/:id', authAdmin, upload.single('image'), async (req, res) => {
+app.put('/api/actualites/:id', authAdminOrPaiementManager, upload.single('image'), async (req, res) => {
   try {
     const { title, excerpt, content, category, author, date, tags, type, isPinned } = req.body;
 
@@ -2349,25 +2817,311 @@ app.put('/api/actualites/:id', authAdmin, upload.single('image'), async (req, re
   }
 });
 
+const mettreAJourStatutPaiement = async (etudiantId) => {
+  const etudiant = await Etudiant.findById(etudiantId);
+  if (!etudiant) return;
+
+  const paiements = await Paiement.find({ etudiant: etudiantId });
+  const totalPaye = paiements.reduce((acc, p) => acc + p.montant, 0);
+  
+  // Calculer montant après bourse
+  const reduction = (etudiant.prixTotal * etudiant.pourcentageBourse) / 100;
+  const montantAPayer = etudiant.prixTotal - reduction;
+  
+  // Auto marquer comme payé si complet
+  if (totalPaye >= montantAPayer && montantAPayer > 0) {
+    await Etudiant.findByIdAndUpdate(etudiantId, { paye: true });
+  } else {
+    await Etudiant.findByIdAndUpdate(etudiantId, { paye: false });
+  }
+};
+
+// 2️⃣ REMPLACER votre route POST /api/paiements par ça :
 app.post('/api/paiements', authAdmin, async (req, res) => {
   try {
-    const { etudiant, cours, moisDebut, nombreMois, montant, note } = req.body;
+    // 🔍 DEBUG - Afficher ce qu'on reçoit
+    console.log('🔍 Données reçues:', req.body);
+    console.log('🔍 Admin ID:', req.admin?.id);
+    
+    // ✅ VALIDATION des champs requis
+    const { etudiant, cours, moisDebut, nombreMois, montant } = req.body;
+    
+    if (!etudiant) {
+      return res.status(400).json({ error: 'etudiant est requis' });
+    }
+    if (!cours) {
+      return res.status(400).json({ error: 'cours est requis' });
+    }
+    if (!moisDebut) {
+      return res.status(400).json({ error: 'moisDebut est requis' });
+    }
+    if (!nombreMois || nombreMois <= 0) {
+      return res.status(400).json({ error: 'nombreMois doit être > 0' });
+    }
+    if (!montant || montant <= 0) {
+      return res.status(400).json({ error: 'montant doit être > 0' });
+    }
 
-    const coursArray = Array.isArray(cours) ? cours : [cours];
-
-    const paiement = new Paiement({
+    // ✅ Créer le paiement
+    const nouveauPaiement = new Paiement({
       etudiant,
-      cours: coursArray, // ✅ الكل دفعة واحدة
-      moisDebut: new Date(moisDebut),
-      nombreMois,
-      montant,
-      note,
-      creePar: req.adminId
+      cours,
+      moisDebut: new Date(moisDebut), // S'assurer que c'est une date
+      nombreMois: parseInt(nombreMois), // S'assurer que c'est un nombre
+      montant: parseFloat(montant), // S'assurer que c'est un nombre
+      note: req.body.note || '',
+      creePar: req.admin?.id
     });
 
-    await paiement.save();
+    console.log('💾 Paiement à sauvegarder:', nouveauPaiement);
+    
+    const paiementSauvegarde = await nouveauPaiement.save();
+    console.log('✅ Paiement sauvegardé:', paiementSauvegarde._id);
+    
+    // 🎯 AUTO UPDATE PAYÉ STATUS
+    await mettreAJourStatutPaiement(etudiant);
+    console.log('✅ Statut mis à jour pour étudiant:', etudiant);
 
-    res.status(201).json({ message: 'Paiement groupé ajouté', paiement });
+    res.status(201).json({
+      success: true,
+      message: 'Paiement ajouté et statut mis à jour',
+      paiement: paiementSauvegarde
+    });
+
+  } catch (err) {
+    // 🚨 AFFICHER L'ERREUR COMPLÈTE
+    console.error('❌ Erreur complète:', err);
+    console.error('❌ Message:', err.message);
+    console.error('❌ Stack:', err.stack);
+    
+    res.status(400).json({ 
+      error: err.message,
+      details: err.errors ? Object.keys(err.errors).map(key => ({
+        field: key,
+        message: err.errors[key].message
+      })) : null
+    });
+  }
+});
+app.put('/api/etudiant/profil', authEtudiant, async (req, res) => {
+  try {
+    const { email, motDePasse, motDePasseActuel } = req.body;
+
+    // Récupérer l'étudiant actuel
+    const etudiant = await Etudiant.findById(req.etudiantId);
+    if (!etudiant) {
+      return res.status(404).json({ message: 'Étudiant non trouvé' });
+    }
+
+    // Vérification du mot de passe actuel (obligatoire pour toute modification)
+    if (!motDePasseActuel || motDePasseActuel.trim() === '') {
+      return res.status(400).json({ message: 'Mot de passe actuel requis' });
+    }
+
+    const motDePasseValide = await bcrypt.compare(motDePasseActuel, etudiant.motDePasse);
+    if (!motDePasseValide) {
+      return res.status(400).json({ message: 'Mot de passe actuel incorrect' });
+    }
+
+    const modifications = {};
+
+    // Mise à jour de l'email
+    if (email && email.trim() !== '') {
+      const emailTrimmed = email.toLowerCase().trim();
+      
+      // Validation du format email
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(emailTrimmed)) {
+        return res.status(400).json({ message: 'Format d\'email invalide' });
+      }
+
+      // Vérifier que l'email n'est pas déjà utilisé par un autre étudiant
+      const emailExiste = await Etudiant.findOne({ 
+        email: emailTrimmed, 
+        _id: { $ne: req.etudiantId } 
+      });
+      
+      if (emailExiste) {
+        return res.status(400).json({ message: 'Cet email est déjà utilisé' });
+      }
+
+      modifications.email = emailTrimmed;
+    }
+
+    // Mise à jour du mot de passe
+    if (motDePasse && motDePasse.trim() !== '') {
+      if (motDePasse.length < 6) {
+        return res.status(400).json({ message: 'Le nouveau mot de passe doit contenir au moins 6 caractères' });
+      }
+
+      const hashedPassword = await bcrypt.hash(motDePasse.trim(), 10);
+      modifications.motDePasse = hashedPassword;
+    }
+
+    // Vérifier qu'au moins une modification est demandée
+    if (Object.keys(modifications).length === 0) {
+      return res.status(400).json({ message: 'Aucune modification à effectuer' });
+    }
+
+    // Appliquer les modifications
+    modifications.updatedAt = new Date();
+
+    const etudiantMiseAJour = await Etudiant.findByIdAndUpdate(
+      req.etudiantId,
+      modifications,
+      { new: true, runValidators: true }
+    );
+
+    // Retourner la réponse sans le mot de passe
+    const response = {
+      _id: etudiantMiseAJour._id,
+      email: etudiantMiseAJour.email,
+      prenom: etudiantMiseAJour.prenom,
+      nomDeFamille: etudiantMiseAJour.nomDeFamille,
+      updatedAt: etudiantMiseAJour.updatedAt
+    };
+
+    res.status(200).json({
+      message: 'Profil mis à jour avec succès',
+      etudiant: response
+    });
+
+  } catch (err) {
+    console.error('Erreur mise à jour profil étudiant:', err);
+    
+    if (err.name === 'ValidationError') {
+      const errors = Object.values(err.errors).map(e => e.message);
+      return res.status(400).json({ message: 'Erreur de validation', errors });
+    }
+
+    if (err.code === 11000) {
+      return res.status(400).json({ message: 'Email déjà utilisé' });
+    }
+
+    res.status(500).json({
+      message: 'Erreur interne du serveur',
+      error: err.message
+    });
+  }
+});
+app.post('/api/commerciaux', authAdmin, async (req, res) => {
+  try {
+    const { nom, telephone, email } = req.body;
+    const nouveau = new Commercial({ nom, telephone, email });
+    await nouveau.save();
+    res.status(201).json(nouveau);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+app.put('/api/professeur/profil', authProfesseur, async (req, res) => {
+  try {
+    const { email, motDePasse, motDePasseActuel } = req.body;
+
+    // Récupérer le professeur actuel
+    const professeur = await Professeur.findById(req.professeurId);
+    if (!professeur) {
+      return res.status(404).json({ message: 'Professeur non trouvé' });
+    }
+
+    // Vérification du mot de passe actuel (obligatoire pour toute modification)
+    if (!motDePasseActuel || motDePasseActuel.trim() === '') {
+      return res.status(400).json({ message: 'Mot de passe actuel requis' });
+    }
+
+    const motDePasseValide = await bcrypt.compare(motDePasseActuel, professeur.motDePasse);
+    if (!motDePasseValide) {
+      return res.status(400).json({ message: 'Mot de passe actuel incorrect' });
+    }
+
+    const modifications = {};
+
+    // Mise à jour de l'email
+    if (email && email.trim() !== '') {
+      const emailTrimmed = email.toLowerCase().trim();
+      
+      // Validation du format email
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(emailTrimmed)) {
+        return res.status(400).json({ message: 'Format d\'email invalide' });
+      }
+
+      // Vérifier que l'email n'est pas déjà utilisé par un autre professeur
+      const emailExiste = await Professeur.findOne({ 
+        email: emailTrimmed, 
+        _id: { $ne: req.professeurId } 
+      });
+      
+      if (emailExiste) {
+        return res.status(400).json({ message: 'Cet email est déjà utilisé' });
+      }
+
+      modifications.email = emailTrimmed;
+    }
+
+    // Mise à jour du mot de passe
+    if (motDePasse && motDePasse.trim() !== '') {
+      if (motDePasse.length < 6) {
+        return res.status(400).json({ message: 'Le nouveau mot de passe doit contenir au moins 6 caractères' });
+      }
+
+      const hashedPassword = await bcrypt.hash(motDePasse.trim(), 10);
+      modifications.motDePasse = hashedPassword;
+    }
+
+    // Vérifier qu'au moins une modification est demandée
+    if (Object.keys(modifications).length === 0) {
+      return res.status(400).json({ message: 'Aucune modification à effectuer' });
+    }
+
+    // Appliquer les modifications
+    modifications.updatedAt = new Date();
+
+    const professeurMiseAJour = await Professeur.findByIdAndUpdate(
+      req.professeurId,
+      modifications,
+      { new: true, runValidators: true }
+    );
+
+    // Retourner la réponse sans le mot de passe
+    const response = {
+      _id: professeurMiseAJour._id,
+      email: professeurMiseAJour.email,
+      nom: professeurMiseAJour.nom,
+      genre: professeurMiseAJour.genre,
+      telephone: professeurMiseAJour.telephone,
+      matiere: professeurMiseAJour.matiere,
+      updatedAt: professeurMiseAJour.updatedAt
+    };
+
+    res.status(200).json({
+      message: 'Profil mis à jour avec succès',
+      professeur: response
+    });
+
+  } catch (err) {
+    console.error('Erreur mise à jour profil professeur:', err);
+    
+    if (err.name === 'ValidationError') {
+      const errors = Object.values(err.errors).map(e => e.message);
+      return res.status(400).json({ message: 'Erreur de validation', errors });
+    }
+
+    if (err.code === 11000) {
+      return res.status(400).json({ message: 'Email déjà utilisé' });
+    }
+
+    res.status(500).json({
+      message: 'Erreur interne du serveur',
+      error: err.message
+    });
+  }
+});
+// ✅ Lister tous les commerciaux
+app.get('/api/commerciaux', authAdmin, async (req, res) => {
+  try {
+    const commerciaux = await Commercial.find().sort({ nom: 1 });
+    res.json(commerciaux);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -2450,104 +3204,142 @@ app.post('/api/messages/upload', authEtudiant, uploadMessageFile.single('fichier
     res.status(500).json({ message: 'Erreur serveur', error: err.message });
   }
 });
-
+app.get('/api/paiements/etudiant/:etudiantId', authAdmin, async (req, res) => {
+  try {
+    const paiements = await Paiement.find({ etudiant: req.params.etudiantId });
+    res.json(paiements);
+  } catch (err) {
+    res.status(500).json({ message: "Erreur lors de la récupération des paiements", error: err.message });
+  }
+});
 // ✅ Lister les paiements
 app.get('/api/paiements', authAdmin, async (req, res) => {
   try {
     const paiements = await Paiement.find()
-      .populate('etudiant', 'nomComplet telephone') // afficher nomComplet et téléphone
-      .populate('creePar', 'nom'); // afficher اسم المدير
+      .populate('etudiant', 'prenom nomDeFamille nomComplet telephoneEtudiant') // ✅ telephoneEtudiant
+      .populate('creePar', 'nom');
 
     res.json(paiements);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
-// 📌 API: Liste paiements expirés
-// 📌 Route GET /api/paiements/expirés
+
 app.get('/api/paiements/exp', authAdmin, async (req, res) => {
   try {
-    const paiements = await Paiement.find()
-      .populate('etudiant', 'image nomComplet actif')
-      .sort({ moisDebut: 1 }); // نرتبو من الأقدم للجديد
-
-    const aujourdHui = new Date();
-
-    // نخزنو جميع الدفعات حسب الطالب والكورس
-    const paiementsParEtudiantCours = new Map();
-
-    for (const p of paiements) {
-      for (const coursName of p.cours) {
-        const key = `${p.etudiant?._id}_${coursName}`;
-        if (!paiementsParEtudiantCours.has(key)) {
-          paiementsParEtudiantCours.set(key, []);
-        }
-        paiementsParEtudiantCours.get(key).push(p);
-      }
-    }
+    const etudiants = await Etudiant.find({ actif: true });
+    const paiements = await Paiement.find({}).lean();
 
     const expires = [];
 
-    for (const [key, paiementsCours] of paiementsParEtudiantCours.entries()) {
-      const [etudiantId, nomCours] = key.split('_');
-      const etudiant = paiementsCours[0].etudiant;
+    for (const etudiant of etudiants) {
+      if (!etudiant.cours || etudiant.cours.length === 0) continue;
 
-      if (!etudiant?.actif) continue;
+      for (const nomCours of etudiant.cours) {
+        const paiementsCours = paiements.filter(p =>
+          p.etudiant?.toString() === etudiant._id.toString() &&
+          p.cours.includes(nomCours)
+        );
 
-      // نحددو الفترات ديال كل دفعة
-      const periodes = paiementsCours.map(p => {
-        const debut = new Date(p.moisDebut);
-        const fin = new Date(debut);
-        fin.setMonth(fin.getMonth() + Number(p.nombreMois));
-        return { debut, fin };
-      });
+        const prixTotal = etudiant.prixTotal || 0;
+        const montantPaye = paiementsCours.reduce((acc, p) => acc + (p.montant || 0), 0);
+        const reste = Math.max(0, prixTotal - montantPaye);
 
-      // نرتبو الفترات
-      periodes.sort((a, b) => a.debut - b.debut);
-
-      // ندمجو الفترات لي متداخلين أو متتابعين
-      const fusionnees = [];
-      let current = periodes[0];
-
-      for (let i = 1; i < periodes.length; i++) {
-        const next = periodes[i];
-
-        if (next.debut <= current.fin) {
-          current.fin = new Date(Math.max(current.fin.getTime(), next.fin.getTime()));
-        } else {
-          fusionnees.push(current);
-          current = next;
+        // ✅ Si l'étudiant a payé le prix complet, ne pas l'afficher dans les expirés
+        if (reste <= 0) {
+          continue; // Paiement complet, pas d'expiration
         }
-      }
 
-      fusionnees.push(current);
-
-      // نشوفو واش اليوم داخل شي وحدة من الفترات
-      let actif = false;
-
-      for (const periode of fusionnees) {
-        if (aujourdHui >= periode.debut && aujourdHui <= periode.fin) {
-          actif = true;
-          break;
+        // ✅ Si aucun paiement, utiliser la date d'inscription comme référence
+        if (paiementsCours.length === 0) {
+          expires.push({
+            etudiant: {
+              _id: etudiant._id,
+              prenom: etudiant.prenom,
+              nomDeFamille: etudiant.nomDeFamille,
+              nomComplet: etudiant.nomComplet,
+              telephone: etudiant.telephone,
+              email: etudiant.email,
+              image: etudiant.image,
+              actif: etudiant.actif
+            },
+            cours: nomCours,
+            derniereFin: etudiant.dateInscription || etudiant.createdAt || new Date(), // ✅ Date d'inscription
+            prixTotal,
+            montantPaye: 0,
+            reste: prixTotal,
+            type: 'nouveau' // ✅ Pour identifier les nouveaux étudiants
+          });
+          continue;
         }
-      }
 
-      if (!actif) {
-        expires.push({
-          etudiant,
-          cours: nomCours,
-          derniereFin: fusionnees[fusionnees.length - 1].fin,
-        });
+        // ✅ Si il y a des paiements mais pas complets
+        paiementsCours.sort((a, b) => new Date(a.moisDebut) - new Date(b.moisDebut));
+
+        const fusionnees = [];
+        for (const paiement of paiementsCours) {
+          const debut = new Date(paiement.moisDebut);
+          const fin = new Date(paiement.moisDebut);
+          fin.setMonth(fin.getMonth() + (paiement.nombreMois || 1));
+
+          if (fusionnees.length === 0) {
+            fusionnees.push({ debut, fin });
+          } else {
+            const derniere = fusionnees[fusionnees.length - 1];
+            const unJourApres = new Date(derniere.fin);
+            unJourApres.setDate(unJourApres.getDate() + 1);
+
+            if (debut <= unJourApres) {
+              derniere.fin = fin > derniere.fin ? fin : derniere.fin;
+            } else {
+              fusionnees.push({ debut, fin });
+            }
+          }
+        }
+
+        const dernierePeriode = fusionnees[fusionnees.length - 1];
+        const maintenant = new Date();
+
+        // ✅ Seulement si la période est expirée ET qu'il reste à payer
+        if (reste > 0 && dernierePeriode.fin < maintenant) {
+          expires.push({
+            etudiant: {
+              _id: etudiant._id,
+              prenom: etudiant.prenom,
+              nomDeFamille: etudiant.nomDeFamille,
+              nomComplet: etudiant.nomComplet,
+              telephone: etudiant.telephone,
+              email: etudiant.email,
+              image: etudiant.image,
+              actif: etudiant.actif
+            },
+            cours: nomCours,
+            derniereFin: dernierePeriode.fin,
+            prixTotal,
+            montantPaye,
+            reste,
+            type: 'expire' // ✅ Pour identifier les vrais expirés
+          });
+        }
       }
     }
 
+    // Trier par nombre de jours expirés (les plus urgents en premier)
+    expires.sort((a, b) => {
+      const aJours = Math.ceil((new Date() - new Date(a.derniereFin)) / (1000 * 60 * 60 * 24));
+      const bJours = Math.ceil((new Date() - new Date(b.derniereFin)) / (1000 * 60 * 60 * 24));
+      return bJours - aJours;
+    });
+
     res.json(expires);
-  } catch (err) {
-    console.error('Erreur serveur /exp:', err);
-    res.status(500).json({ message: 'Erreur serveur', error: err.message });
+  } catch (error) {
+    console.error('Erreur paiements expirés:', error);
+    res.status(500).json({
+      message: 'Erreur serveur lors de la récupération des paiements expirés',
+      error: error.message
+    });
   }
 });
-
 // ✅ Route pour supprimer un message
 app.delete('/api/messages/:messageId', async (req, res) => {
   try {
@@ -2938,7 +3730,7 @@ app.get('/api/vie-scolaire/:id', async (req, res) => {
 });
 
 // POST créer une nouvelle activité (admin uniquement)
-app.post('/api/vie-scolaire', authAdmin, uploadVieScolaire.array('images', 10), async (req, res) => {
+app.post('/api/vie-scolaire', authAdminOrPaiementManager, uploadVieScolaire.array('images', 10), async (req, res) => {
   try {
     const {
       title,
@@ -3018,8 +3810,7 @@ app.post('/api/vie-scolaire', authAdmin, uploadVieScolaire.array('images', 10), 
   }
 });
 
-// PUT modifier une activité (admin uniquement)
-app.put('/api/vie-scolaire/:id', authAdmin, uploadVieScolaire.array('images', 10), async (req, res) => {
+app.put('/api/vie-scolaire/:id', authAdminOrPaiementManager, uploadVieScolaire.array('images', 10), async (req, res) => {
   try {
     if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
       return res.status(400).json({
@@ -3119,8 +3910,7 @@ app.put('/api/vie-scolaire/:id', authAdmin, uploadVieScolaire.array('images', 10
   }
 });
 
-// DELETE supprimer une activité (admin uniquement)
-app.delete('/api/vie-scolaire/:id', authAdmin, async (req, res) => {
+app.delete('/api/vie-scolaire/:id', authAdminOrPaiementManager, async (req, res) => {
   try {
     if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
       return res.status(400).json({
@@ -3164,7 +3954,7 @@ app.delete('/api/vie-scolaire/:id', authAdmin, async (req, res) => {
 });
 
 // DELETE supprimer une image spécifique d'une activité (admin uniquement)
-app.delete('/api/vie-scolaire/:id/images/:imageIndex', authAdmin, async (req, res) => {
+app.delete('/api/vie-scolaire/:id/images/:imageIndex', authAdminOrPaiementManager, async (req, res) => {
   try {
     if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
       return res.status(400).json({
@@ -3435,118 +4225,508 @@ app.get('/api/messages/notifications-etudiant', authEtudiant, async (req, res) =
     res.status(500).json({ message: 'Erreur serveur', error: err.message });
   }
 });
+app.post('/api/admin/paiement-managers', authAdmin, async (req, res) => {
+  try {
+    const { nom, email, telephone, motDePasse, actif = true } = req.body;
+
+    // Validation des champs requis
+    if (!nom || !email || !motDePasse || !telephone) {
+      return res.status(400).json({ 
+        message: 'Nom, email, téléphone et mot de passe sont requis' 
+      });
+    }
+
+    // Validation du format email
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      return res.status(400).json({ 
+        message: 'Format d\'email invalide' 
+      });
+    }
+
+    // Validation mot de passe
+    if (motDePasse.length < 6) {
+      return res.status(400).json({ 
+        message: 'Le mot de passe doit contenir au moins 6 caractères' 
+      });
+    }
+
+    // Vérifier si l'email existe déjà
+    const existingManager = await PaiementManager.findOne({ email: email.toLowerCase().trim() });
+    if (existingManager) {
+      return res.status(400).json({ 
+        message: 'Cet email est déjà utilisé par un autre gestionnaire' 
+      });
+    }
+
+    // Hasher le mot de passe
+    const saltRounds = 12;
+    const hashedPassword = await bcrypt.hash(motDePasse, saltRounds);
+
+    // Créer le nouveau gestionnaire
+    const manager = new PaiementManager({
+      nom: nom.trim(),
+      email: email.toLowerCase().trim(),
+      telephone: telephone.trim(),
+      motDePasse: hashedPassword,
+      actif: actif
+    });
+
+    await manager.save();
+
+    // Retourner les données sans le mot de passe
+    const managerData = manager.toObject();
+    delete managerData.motDePasse;
+
+    res.status(201).json(managerData); // ✅ Return the manager data directly
+
+  } catch (err) {
+    console.error('Erreur création gestionnaire:', err);
+    res.status(500).json({ 
+      message: 'Erreur serveur lors de la création du gestionnaire',
+      error: process.env.NODE_ENV === 'development' ? err.message : undefined
+    });
+  }
+});
+
+// 2. Lire tous les gestionnaires de paiement (GET)
+app.get('/api/admin/paiement-managers', authAdmin, async (req, res) => {
+  try {
+    const { page = 1, limit = 50, actif, search } = req.query;
+    
+    // Construire les filtres
+    let filter = {};
+    
+    if (typeof actif !== 'undefined') {
+      filter.actif = actif === 'true';
+    }
+    
+    if (search) {
+      filter.$or = [
+        { nom: { $regex: search, $options: 'i' } },
+        { email: { $regex: search, $options: 'i' } },
+        { telephone: { $regex: search, $options: 'i' } }
+      ];
+    }
+
+    // Pagination
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+    
+    const managers = await PaiementManager
+      .find(filter, { motDePasse: 0 }) // Exclude password
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(parseInt(limit));
+
+    const total = await PaiementManager.countDocuments(filter);
+
+    // ✅ Return managers array directly (as expected by frontend)
+    res.json(managers);
+
+  } catch (err) {
+    console.error('Erreur récupération gestionnaires:', err);
+    res.status(500).json({ 
+      message: 'Erreur serveur lors de la récupération des gestionnaires',
+      error: process.env.NODE_ENV === 'development' ? err.message : undefined
+    });
+  }
+});
+
+// 3. Lire un gestionnaire spécifique (GET)
+app.get('/api/admin/paiement-managers/:id', authAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // Validation de l'ID MongoDB
+    if (!id.match(/^[0-9a-fA-F]{24}$/)) {
+      return res.status(400).json({ 
+        message: 'ID de gestionnaire invalide' 
+      });
+    }
+
+    const manager = await PaiementManager.findById(id, { motDePasse: 0 });
+    
+    if (!manager) {
+      return res.status(404).json({ 
+        message: 'Gestionnaire de paiement non trouvé' 
+      });
+    }
+
+    res.json(manager); // ✅ Return manager data directly
+
+  } catch (err) {
+    console.error('Erreur récupération gestionnaire:', err);
+    res.status(500).json({ 
+      message: 'Erreur serveur lors de la récupération du gestionnaire',
+      error: process.env.NODE_ENV === 'development' ? err.message : undefined
+    });
+  }
+});
+
+// 4. Mettre à jour un gestionnaire (PUT)
+app.put('/api/admin/paiement-managers/:id', authAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { nom, email, telephone, motDePasse, actif } = req.body;
+
+    // Validation de l'ID MongoDB
+    if (!id.match(/^[0-9a-fA-F]{24}$/)) {
+      return res.status(400).json({ 
+        message: 'ID de gestionnaire invalide' 
+      });
+    }
+
+    // Vérifier si le gestionnaire existe
+    const existingManager = await PaiementManager.findById(id);
+    if (!existingManager) {
+      return res.status(404).json({ 
+        message: 'Gestionnaire de paiement non trouvé' 
+      });
+    }
+
+    // Préparer les mises à jour
+    const updates = {};
+
+    if (nom) {
+      updates.nom = nom.trim();
+    }
+
+    if (email) {
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(email)) {
+        return res.status(400).json({ 
+          message: 'Format d\'email invalide' 
+        });
+      }
+
+      // Vérifier si l'email est déjà utilisé par un autre gestionnaire
+      const emailExists = await PaiementManager.findOne({ 
+        email: email.toLowerCase().trim(),
+        _id: { $ne: id }
+      });
+
+      if (emailExists) {
+        return res.status(400).json({ 
+          message: 'Cet email est déjà utilisé par un autre gestionnaire' 
+        });
+      }
+
+      updates.email = email.toLowerCase().trim();
+    }
+
+    if (telephone) {
+      updates.telephone = telephone.trim();
+    }
+
+    if (typeof actif !== 'undefined') {
+      updates.actif = Boolean(actif);
+    }
+
+    // Gestion du mot de passe
+    if (motDePasse) {
+      if (motDePasse.length < 6) {
+        return res.status(400).json({ 
+          message: 'Le mot de passe doit contenir au moins 6 caractères' 
+        });
+      }
+
+      const saltRounds = 12;
+      updates.motDePasse = await bcrypt.hash(motDePasse, saltRounds);
+    }
+
+    // Mettre à jour la date de modification
+    updates.updatedAt = new Date();
+
+    const updatedManager = await PaiementManager.findByIdAndUpdate(
+      id,
+      updates,
+      { 
+        new: true, 
+        select: '-motDePasse',
+        runValidators: true 
+      }
+    );
+
+    res.json(updatedManager); // ✅ Return updated manager directly
+
+  } catch (err) {
+    console.error('Erreur mise à jour gestionnaire:', err);
+    res.status(500).json({ 
+      message: 'Erreur serveur lors de la mise à jour du gestionnaire',
+      error: process.env.NODE_ENV === 'development' ? err.message : undefined
+    });
+  }
+});
+
+// 5. Supprimer un gestionnaire (DELETE)
+app.delete('/api/admin/paiement-managers/:id', authAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // Validation de l'ID MongoDB
+    if (!id.match(/^[0-9a-fA-F]{24}$/)) {
+      return res.status(400).json({ 
+        message: 'ID de gestionnaire invalide' 
+      });
+    }
+
+    const manager = await PaiementManager.findById(id);
+    
+    if (!manager) {
+      return res.status(404).json({ 
+        message: 'Gestionnaire de paiement non trouvé' 
+      });
+    }
+
+    // Optionnel : Vérifier s'il y a des transactions liées
+    // const transactionsCount = await Transaction.countDocuments({ managerId: id });
+    // if (transactionsCount > 0) {
+    //   return res.status(400).json({ 
+    //     message: 'Impossible de supprimer ce gestionnaire car il a des transactions associées' 
+    //   });
+    // }
+
+    await PaiementManager.findByIdAndDelete(id);
+
+    res.json({ 
+      success: true,
+      message: 'Gestionnaire de paiement supprimé avec succès',
+      deletedManager: {
+        id: manager._id,
+        nom: manager.nom,
+        email: manager.email
+      }
+    });
+
+  } catch (err) {
+    console.error('Erreur suppression gestionnaire:', err);
+    res.status(500).json({ 
+      message: 'Erreur serveur lors de la suppression du gestionnaire',
+      error: process.env.NODE_ENV === 'development' ? err.message : undefined
+    });
+  }
+});
+
+// 6. Activer/Désactiver un gestionnaire (PATCH)
+app.patch('/api/admin/paiement-managers/:id/toggle-active', authAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // Validation de l'ID MongoDB
+    if (!id.match(/^[0-9a-fA-F]{24}$/)) {
+      return res.status(400).json({ 
+        message: 'ID de gestionnaire invalide' 
+      });
+    }
+
+    const manager = await PaiementManager.findById(id);
+    
+    if (!manager) {
+      return res.status(404).json({ 
+        message: 'Gestionnaire de paiement non trouvé' 
+      });
+    }
+
+    // Inverser le statut actif
+    manager.actif = !manager.actif;
+    manager.updatedAt = new Date();
+    
+    await manager.save();
+
+    // Remove password before sending response
+    const managerResponse = manager.toObject();
+    delete managerResponse.motDePasse;
+
+    res.json(managerResponse); // ✅ Return updated manager directly
+
+  } catch (err) {
+    console.error('Erreur changement statut gestionnaire:', err);
+    res.status(500).json({ 
+      message: 'Erreur serveur lors du changement de statut',
+      error: process.env.NODE_ENV === 'development' ? err.message : undefined
+    });
+  }
+});
+
+
+
+
+
 
 app.get('/api/notifications', authAdmin, async (req, res) => {
   try {
     const notifications = [];
     const aujourdHui = new Date();
 
-    // 📌 دمج paiements لكل طالب وكورس
-    const paiements = await Paiement.find()
-      .populate('etudiant', 'nomComplet actif')
-      .sort({ moisDebut: 1 }); // الأقدم أولاً
+    // 1. Traitement des paiements expirés et nouveaux
+    const etudiants = await Etudiant.find({ actif: true }).lean();
+    const paiements = await Paiement.find().populate('etudiant', 'nomComplet actif image telephone email').lean();
 
-    const paiementsParEtudiantCours = new Map();
+    for (const etudiant of etudiants) {
+      if (!etudiant.cours || etudiant.cours.length === 0) continue;
 
-    for (const p of paiements) {
-      const key = `${p.etudiant?._id}_${p.cours}`;
-      if (!paiementsParEtudiantCours.has(key)) {
-        paiementsParEtudiantCours.set(key, []);
-      }
-      paiementsParEtudiantCours.get(key).push(p);
-    }
+      for (const nomCours of etudiant.cours) {
+        // Filtrer et trier les paiements pour cet étudiant et ce cours
+        const paiementsCours = paiements
+          .filter(p => 
+            p.etudiant?._id.toString() === etudiant._id.toString() && 
+            p.cours.includes(nomCours)
+          )
+          .sort((a, b) => new Date(a.moisDebut).getTime() - new Date(b.moisDebut).getTime());
 
-    for (const [key, paiementsCours] of paiementsParEtudiantCours.entries()) {
-      const [etudiantId, nomCours] = key.split('_');
-      const etudiant = paiementsCours[0].etudiant;
-      if (!etudiant?.actif) continue;
+        const prixTotal = etudiant.prixTotal || 0;
+        const montantPaye = paiementsCours.reduce((acc, p) => acc + (p.montant || 0), 0);
+        const reste = Math.max(0, prixTotal - montantPaye);
 
-      const periodes = paiementsCours.map(p => {
-        const debut = new Date(p.moisDebut);
-        const fin = new Date(debut);
-        fin.setMonth(fin.getMonth() + Number(p.nombreMois));
-        return { debut, fin };
-      });
+        // Ignorer si paiement complet
+        if (reste <= 0) continue;
 
-      // ندمجو الفترات
-      periodes.sort((a, b) => a.debut - b.debut);
-      const fusionnees = [];
-      let current = periodes[0];
+        let derniereFin;
+        let typeNotification = '';
 
-      for (let i = 1; i < periodes.length; i++) {
-        const next = periodes[i];
-        if (next.debut <= current.fin) {
-          current.fin = new Date(Math.max(current.fin.getTime(), next.fin.getTime()));
+        // Cas nouveau sans paiement
+        if (paiementsCours.length === 0) {
+          derniereFin = etudiant.dateInscription || etudiant.createdAt;
+          typeNotification = 'payment_new';
         } else {
-          fusionnees.push(current);
-          current = next;
+          // Fusionner les périodes de paiement
+          const fusionnees = [];
+          for (const paiement of paiementsCours) {
+            const debut = new Date(paiement.moisDebut);
+            const fin = new Date(debut);
+            fin.setMonth(fin.getMonth() + (paiement.nombreMois || 1));
+
+            if (fusionnees.length === 0) {
+              fusionnees.push({ debut, fin });
+            } else {
+              const derniere = fusionnees[fusionnees.length - 1];
+              const unJourApres = new Date(derniere.fin);
+              unJourApres.setDate(unJourApres.getDate() + 1);
+
+              if (debut <= unJourApres) {
+                derniere.fin = fin > derniere.fin ? fin : derniere.fin;
+              } else {
+                fusionnees.push({ debut, fin });
+              }
+            }
+          }
+          derniereFin = fusionnees[fusionnees.length - 1].fin;
+          typeNotification = derniereFin < aujourdHui ? 'payment_expired' : 'payment_active';
         }
-      }
 
-      fusionnees.push(current);
-
-      // نحددو الحالة
-      let actif = false;
-      let joursRestants = 0;
-
-      for (const periode of fusionnees) {
-        if (aujourdHui >= periode.debut && aujourdHui <= periode.fin) {
-          actif = true;
-          joursRestants = Math.ceil((periode.fin - aujourdHui) / (1000 * 60 * 60 * 24));
-          break;
+        // Créer notification si nouveau ou expiré
+        if (typeNotification === 'payment_new' || (typeNotification === 'payment_expired' && reste > 0)) {
+          const joursExpires = Math.ceil((aujourdHui - derniereFin) / (1000 * 60 * 60 * 24));
+          
+          notifications.push({
+            id: `payment_${typeNotification}_${etudiant._id}_${nomCours}`,
+            type: typeNotification,
+            title: typeNotification === 'payment_new' 
+              ? 'Nouvel étudiant non payé' 
+              : 'Paiement expiré',
+            message: typeNotification === 'payment_new'
+              ? `🆕 ${etudiant.nomComplet} inscrit à "${nomCours}" n'a encore effectué aucun paiement`
+              : `💰 Paiement de ${etudiant.nomComplet} pour "${nomCours}" a expiré il y a ${joursExpires} jour(s)`,
+            priority: typeNotification === 'payment_new' ? 'high' : 'urgent',
+            timestamp: derniereFin,
+            data: {
+              etudiantId: etudiant._id,
+              etudiantNom: etudiant.nomComplet,
+              etudiantInfo: {
+                telephone: etudiant.telephone,
+                email: etudiant.email,
+                image: etudiant.image
+              },
+              cours: nomCours,
+              joursExpires,
+              prixTotal,
+              montantPaye,
+              reste,
+              derniereFin
+            }
+          });
         }
-      }
-
-      const derniereFin = fusionnees[fusionnees.length - 1].fin;
-
-      if (!actif) {
-        notifications.push({
-          id: `payment_expired_${etudiantId}_${nomCours}`,
-          type: 'payment_expired',
-          title: 'Paiement expiré',
-          message: `💰 Paiement de ${etudiant.nomComplet} pour le cours "${nomCours}" a expiré le ${derniereFin.toLocaleDateString()}`,
-          priority: 'urgent',
-          timestamp: derniereFin,
-          data: {
-            etudiantId,
-            etudiantNom: etudiant.nomComplet,
-            cours: nomCours,
-            joursExpires: Math.ceil((aujourdHui - derniereFin) / (1000 * 60 * 60 * 24)),
-          },
-        });
-      } else if (joursRestants <= 7) {
-        notifications.push({
-          id: `payment_expiring_${etudiantId}_${nomCours}`,
-          type: 'payment_expiring',
-          title: 'Paiement expirant bientôt',
-          message: `⏳ Paiement de ${etudiant.nomComplet} pour le cours "${nomCours}" expire dans ${joursRestants} jour(s)`,
-          priority: joursRestants <= 3 ? 'high' : 'medium',
-          timestamp: derniereFin,
-          data: {
-            etudiantId,
-            etudiantNom: etudiant.nomComplet,
-            cours: nomCours,
-            joursRestants,
-          },
-        });
       }
     }
 
-    // 🎯 Absences
-    const SEUILS_ABSENCE = { NORMAL: 10, URGENT: 15, CRITIQUE: 20 };
-    const etudiantsActifs = await Etudiant.find({ actif: true });
+    // 2. Traitement des paiements qui expirent bientôt (7 jours ou moins)
+    for (const etudiant of etudiants) {
+      if (!etudiant.cours || etudiant.cours.length === 0) continue;
 
-    for (const etudiant of etudiantsActifs) {
+      for (const nomCours of etudiant.cours) {
+        const paiementsCours = paiements
+          .filter(p => 
+            p.etudiant?._id.toString() === etudiant._id.toString() && 
+            p.cours.includes(nomCours)
+          )
+          .sort((a, b) => new Date(a.moisDebut).getTime() - new Date(b.moisDebut).getTime());
+
+        if (paiementsCours.length === 0) continue;
+
+        // Fusionner les périodes
+        const fusionnees = [];
+        for (const paiement of paiementsCours) {
+          const debut = new Date(paiement.moisDebut);
+          const fin = new Date(debut);
+          fin.setMonth(fin.getMonth() + (paiement.nombreMois || 1));
+
+          if (fusionnees.length === 0) {
+            fusionnees.push({ debut, fin });
+          } else {
+            const derniere = fusionnees[fusionnees.length - 1];
+            const unJourApres = new Date(derniere.fin);
+            unJourApres.setDate(unJourApres.getDate() + 1);
+
+            if (debut <= unJourApres) {
+              derniere.fin = fin > derniere.fin ? fin : derniere.fin;
+            } else {
+              fusionnees.push({ debut, fin });
+            }
+          }
+        }
+
+        const derniereFin = fusionnees[fusionnees.length - 1].fin;
+        const joursRestants = Math.ceil((derniereFin - aujourdHui) / (1000 * 60 * 60 * 24));
+
+        // Notification pour paiement expirant bientôt (entre 1 et 7 jours)
+        if (joursRestants <= 7 && joursRestants > 0) {
+          notifications.push({
+            id: `payment_expiring_${etudiant._id}_${nomCours}`,
+            type: 'payment_expiring',
+            title: 'Paiement expirant bientôt',
+            message: `⏳ Paiement de ${etudiant.nomComplet} pour "${nomCours}" expire dans ${joursRestants} jour(s)`,
+            priority: joursRestants <= 3 ? 'high' : 'medium',
+            timestamp: derniereFin,
+            data: {
+              etudiantId: etudiant._id,
+              etudiantNom: etudiant.nomComplet,
+              etudiantInfo: {
+                telephone: etudiant.telephone,
+                email: etudiant.email,
+                image: etudiant.image
+              },
+              cours: nomCours,
+              joursRestants,
+              dateExpiration: derniereFin
+            }
+          });
+        }
+      }
+    }
+
+    // 3. Traitement des absences
+    const SEUILS_ABSENCE = { NORMAL: 10, URGENT: 15, CRITIQUE: 20 };
+    for (const etudiant of etudiants) {
       const absences = await Presence.find({
         etudiant: etudiant._id,
         present: false,
-      });
+      }).lean();
 
       const nombreAbsences = absences.length;
       const notificationSupprimee = await NotificationSupprimee.findOne({
         key: `absence_${etudiant._id}`,
         type: 'absence_frequent',
-      });
+      }).lean();
 
       let doitCreerNotification = false;
       let priorite = 'medium';
@@ -3595,12 +4775,12 @@ app.get('/api/notifications', authAdmin, async (req, res) => {
       }
     }
 
-    // 📅 Events
+    // 4. Traitement des événements à venir
     const dans7jours = new Date();
     dans7jours.setDate(dans7jours.getDate() + 7);
     const evenements = await Evenement.find({
       dateDebut: { $gte: aujourdHui, $lte: dans7jours },
-    }).sort({ dateDebut: 1 });
+    }).sort({ dateDebut: 1 }).lean();
 
     for (const evenement of evenements) {
       const joursRestants = Math.ceil((new Date(evenement.dateDebut) - aujourdHui) / (1000 * 60 * 60 * 24));
@@ -3627,12 +4807,12 @@ app.get('/api/notifications', authAdmin, async (req, res) => {
       });
     }
 
-    // 🔽 ترتيب حسب الأولوية
+    // Tri final par priorité et date
     const priorityOrder = { urgent: 4, high: 3, medium: 2, low: 1 };
     notifications.sort((a, b) => {
       const priorityDiff = priorityOrder[b.priority] - priorityOrder[a.priority];
       if (priorityDiff !== 0) return priorityDiff;
-      return new Date(b.timestamp) - new Date(a.timestamp);
+      return new Date(a.timestamp) - new Date(b.timestamp);
     });
 
     res.json({
@@ -3647,6 +4827,10 @@ app.get('/api/notifications', authAdmin, async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+
+
+// 7. Route supplémentaire : Statistiques des gestionnaires
+
 
 app.get('/api/messages/notifications-professeur', authProfesseur, async (req, res) => {
   try {
@@ -3824,7 +5008,7 @@ app.get('/api/professeur/me', authProfesseur, async (req, res) => {
 
 
 // Lancer le serveur
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 5004;
 app.listen(PORT, () => {
     console.log(`🚀 Serveur lancé sur http://localhost:${PORT}`);
 });

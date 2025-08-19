@@ -8,11 +8,13 @@ import {
   ClipboardList,
   LogOut,
   Menu,
+  Lock,
   X,
   Home,
   Calendar,
   FileText,
   Upload,
+  FilePlus2,
   BookOpen,
   User,
     MessageCircle
@@ -113,6 +115,18 @@ const SidebarProf = ({ onLogout }) => {
       label: 'Exercices de cours',
       icon: BookOpen
     },
+
+
+    {
+      path: '/professeur/AjouterBulletin',
+      label: 'Ajouter Bulletin',
+      icon: FilePlus2
+    },
+    
+  {   path: '/professeur/profil',
+      label: 'Mot de passe',
+      icon: Lock
+    }
     
   ];
 
@@ -137,7 +151,7 @@ const SidebarProf = ({ onLogout }) => {
 
   return (
     <div>
-      <style jsx>{`
+ <style jsx>{`
         /* Variables CSS */
         :root {
           --sidebar-width: 280px;
@@ -165,11 +179,11 @@ const SidebarProf = ({ onLogout }) => {
           box-sizing: border-box;
         }
 
-        /* Toggle Button - Toujours visible */
+        /* Toggle Button - Positionné en dehors de la sidebar */
         .sidebar-toggle {
           position: fixed;
           top: 20px;
-          left: 20px;
+          left: ${isOpen ? 'calc(var(--sidebar-width) + 20px)' : '20px'};
           z-index: 1001;
           background: var(--primary-color);
           color: white;
@@ -184,6 +198,13 @@ const SidebarProf = ({ onLogout }) => {
           justify-content: center;
           width: 48px;
           height: 48px;
+        }
+
+        /* Sur mobile, le bouton reste à gauche */
+        @media (max-width: 768px) {
+          .sidebar-toggle {
+            left: 20px !important;
+          }
         }
 
         .sidebar-toggle:hover {

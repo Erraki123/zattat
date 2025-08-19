@@ -35,7 +35,7 @@ const handleLogin = async () => {
   setMessage('');
 
   try {
-    const res = await fetch('http://localhost:5000/api/login', {
+    const res = await fetch('http://195.179.229.230:5004/api/login', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -58,6 +58,8 @@ const handleLogin = async () => {
           window.location.href = '/professeur';
         } else if (data.role === 'etudiant') {
           window.location.href = '/etudiant';
+        }else if (data.role === 'paiement_manager') { // Nouveau cas
+          window.location.href = '/manager';
         } else {
           setMessage('error|Rôle utilisateur inconnu');
         }
@@ -565,7 +567,7 @@ const handleLogin = async () => {
             
             <div className="brand-section">
               <div className="brand-logo">
-                <img src="/logo-ak.png" alt="Alfred Kastler Logo" />
+                <img src="/logo-ak-removebg-preview.png" alt="Alfred Kastler Logo" />
               </div>
               <h1 className="brand-title">Alfred Kastler</h1>
             </div>
