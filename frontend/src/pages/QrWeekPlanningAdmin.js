@@ -46,7 +46,7 @@ function QrWeekPlanningAdmin() {
   };
 
   useEffect(() => {
-    fetch('http://195.179.229.230:5004/api/cours', {
+    fetch('http://localhost:5000/api/cours', {
       headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
     })
       .then(res => res.json())
@@ -54,7 +54,7 @@ function QrWeekPlanningAdmin() {
         setCoursList(data);
         const profData = {};
         for (const cours of data) {
-          const res = await fetch(`http://195.179.229.230:5004/api/admin/professeurs-par-cours/${cours.nom}`, {
+          const res = await fetch(`http://localhost:5000/api/admin/professeurs-par-cours/${cours.nom}`, {
             headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
           });
           const profs = await res.json();
@@ -95,7 +95,7 @@ function QrWeekPlanningAdmin() {
 
 
     try {
-      const res = await fetch('http://195.179.229.230:5004/api/admin/qr-week-bulk', {
+      const res = await fetch('http://localhost:5000/api/admin/qr-week-bulk', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -130,7 +130,7 @@ function QrWeekPlanningAdmin() {
     const dayDate = getDateFromJourWithReference(selectedDay, qrDate);
     
     try {
-      const res = await fetch('http://195.179.229.230:5004/api/admin/qr-day-generate', {
+      const res = await fetch('http://localhost:5000/api/admin/qr-day-generate', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -219,7 +219,7 @@ function QrWeekPlanningAdmin() {
     const token = localStorage.getItem('token');
 
     try {
-      const res = await fetch(`http://195.179.229.230:5004/api/admin/qr-day-delete`, {
+      const res = await fetch(`http://localhost:5000/api/admin/qr-day-delete`, {
         method: 'DELETE',
         headers: {
           'Content-Type': 'application/json',
@@ -251,7 +251,7 @@ function QrWeekPlanningAdmin() {
     const token = localStorage.getItem('token');
 
     try {
-      const res = await fetch(`http://195.179.229.230:5004/api/admin/qr-day-sessions?date=${dayDate}`, {
+      const res = await fetch(`http://localhost:5000/api/admin/qr-day-sessions?date=${dayDate}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
 
@@ -272,7 +272,7 @@ function QrWeekPlanningAdmin() {
     const token = localStorage.getItem('token');
 
     try {
-      const res = await fetch(`http://195.179.229.230:5004/api/admin/qr-session/${sessionId}`, {
+      const res = await fetch(`http://localhost:5000/api/admin/qr-session/${sessionId}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -299,7 +299,7 @@ function QrWeekPlanningAdmin() {
     const token = localStorage.getItem('token');
 
     try {
-      const res = await fetch(`http://195.179.229.230:5004/api/admin/qr-session/${sessionId}`, {
+      const res = await fetch(`http://localhost:5000/api/admin/qr-session/${sessionId}`, {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${token}` }
       });

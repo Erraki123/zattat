@@ -42,7 +42,7 @@ const AjouterPresence = () => {
           return;
         }
 
-        const res = await axios.get('http://195.179.229.230:5004/api/professeur/mes-cours', {
+        const res = await axios.get('http://localhost:5000/api/professeur/mes-cours', {
           headers: { Authorization: `Bearer ${token}` }
         });
 
@@ -269,7 +269,7 @@ const AjouterPresence = () => {
 
     try {
       const token = localStorage.getItem('token');
-      const res = await axios.get('http://195.179.229.230:5004/api/etudiants', {
+      const res = await axios.get('http://localhost:5000/api/etudiants', {
         headers: { Authorization: `Bearer ${token}` },
       });
 
@@ -314,7 +314,7 @@ const AjouterPresence = () => {
 
     try {
       for (const pres of presences) {
-        await axios.post('http://195.179.229.230:5004/api/presences', {
+        await axios.post('http://localhost:5000/api/presences', {
           etudiant: pres.etudiant,
           cours: selectedCours,
           dateSession,

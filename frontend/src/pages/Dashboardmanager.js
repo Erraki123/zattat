@@ -75,19 +75,19 @@ const ManagerDashboard = () => {
         setLoading(true);
         
         // Chargement des actualités
-        const actualitesRes = await fetch('http://195.179.229.230:5004/api/actualites', {
+        const actualitesRes = await fetch('http://localhost:5000/api/actualites', {
           headers: { 'Authorization': `Bearer ${token}` }
         });
         const actualitesData = await actualitesRes.json();
         const actualites = Array.isArray(actualitesData) ? actualitesData : actualitesData.actualites || [];
 
         // Chargement de la vie scolaire
-        const vieScolaireRes = await fetch('http://195.179.229.230:5004/api/vie-scolaire');
+        const vieScolaireRes = await fetch('http://localhost:5000/api/vie-scolaire');
         const vieScolaireData = await vieScolaireRes.json();
         const vieScolaire = vieScolaireData.data || [];
 
         // Chargement des messages
-        const messagesRes = await fetch('http://195.179.229.230:5004/api/admin/contact-messages', {
+        const messagesRes = await fetch('http://localhost:5000/api/admin/contact-messages', {
           headers: { 'Authorization': `Bearer ${token}` }
         });
         const messages = await messagesRes.json();

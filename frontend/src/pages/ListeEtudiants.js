@@ -17,7 +17,8 @@ import {
   MapPin,
   RotateCcw, X,
   Trash2,
-  Mail
+  Mail,
+  GraduationCap
 } from "lucide-react";
 
 
@@ -27,6 +28,7 @@ const ListeEtudiants = () => {
   const [recherche, setRecherche] = useState('');
   const [filtreGenre, setFiltreGenre] = useState('');
   const [filtreCours, setFiltreCours] = useState('');
+  const [filtreNiveau, setFiltreNiveau] = useState('');
   const [filtreActif, setFiltreActif] = useState('');
   const [pageActuelle, setPageActuelle] = useState(1);
   const [etudiantsParPage] = useState(10);
@@ -38,6 +40,7 @@ const [formAjout, setFormAjout] = useState({
   nomComplet: '',
   genre: 'Homme',
   dateNaissance: '',
+  niveau: '6ème Collège',
   telephoneEtudiant: '',
   telephonePere: '',
   telephoneMere: '',
@@ -51,7 +54,7 @@ const [formAjout, setFormAjout] = useState({
   paye: false,
   pourcentageBourse: 0,
   typePaiement: 'Cash',
-  anneeScolaire: '' // Remplace dateEtReglement
+  anneeScolaire: ''
 });
   const [vueMode, setVueMode] = useState('tableau'); // 'tableau' ou 'carte'
 
@@ -70,6 +73,7 @@ const [formAjout, setFormAjout] = useState({
   nomComplet: '',
   genre: 'Homme',
   dateNaissance: '',
+  niveau: '6ème Collège',
   telephoneEtudiant: '',
   telephonePere: '',
   telephoneMere: '',
@@ -83,7 +87,7 @@ const [formAjout, setFormAjout] = useState({
   paye: false,
   pourcentageBourse: 0,
   typePaiement: 'Cash',
-  anneeScolaire: '' // Remplace dateEtReglement
+  anneeScolaire: ''
 });
   const [imageFileModifier, setImageFileModifier] = useState(null);
   const [messageModifier, setMessageModifier] = useState('');
@@ -92,6 +96,34 @@ const [formAjout, setFormAjout] = useState({
   
   const navigate = useNavigate();
 
+  // Niveaux disponibles selon le schéma
+  const niveauxDisponibles = [
+    // Collège
+    "6ème Collège",
+    "5ème Collège", 
+    "4ème Collège",
+    "3ème Collège",
+    // Lycée Tronc Commun
+    "Tronc Commun Scientifique",
+    "Tronc Commun Littéraire",
+    "Tronc Commun Technique",
+    // 1ère Bac
+    "1BAC SM",
+    "1BAC PC",
+    "1BAC SVT",
+    "1BAC Lettres",
+    "1BAC Économie",
+    "1BAC Technique",
+    // 2ème Bac
+    "2BAC SMA",
+    "2BAC SMB",
+    "2BAC PC",
+    "2BAC SVT",
+    "2BAC Lettres",
+    "2BAC Économie",
+    "2BAC Technique"
+  ];
+
   useEffect(() => {
     fetchEtudiants();
     fetchCours();
@@ -99,13 +131,13 @@ const [formAjout, setFormAjout] = useState({
 
   useEffect(() => {
     filtrerEtudiants();
-  }, [etudiants, recherche, filtreGenre, filtreCours, filtreActif]);
+  }, [etudiants, recherche, filtreGenre, filtreCours, filtreNiveau, filtreActif]);
 
   const fetchEtudiants = async () => {
     try {
       setLoading(true);
       const token = localStorage.getItem('token');
-      const res = await axios.get('http://195.179.229.230:5004/api/etudiants', {
+      const res = await axios.get('http://localhost:5000/api/etudiants', {
         headers: { Authorization: `Bearer ${token}` }
       });
       setEtudiants(res.data);
@@ -119,7 +151,7 @@ const [formAjout, setFormAjout] = useState({
   const fetchCours = async () => {
     try {
       const token = localStorage.getItem('token');
-      const res = await axios.get('http://195.179.229.230:5004/api/cours', {
+      const res = await axios.get('http://localhost:5000/api/cours', {
         headers: { Authorization: `Bearer ${token}` }
       });
       setListeCours(res.data);
@@ -153,6 +185,11 @@ if (recherche) {
       );
     }
 
+    // Filtre par niveau
+    if (filtreNiveau) {
+      resultats = resultats.filter(e => e.niveau === filtreNiveau);
+    }
+
     // Filtre par statut actif
     if (filtreActif !== '') {
       resultats = resultats.filter(e => e.actif === (filtreActif === 'true'));
@@ -174,6 +211,7 @@ if (recherche) {
     nomComplet: '',
     genre: 'Homme',
     dateNaissance: '',
+    niveau: '6ème Collège',
     telephoneEtudiant: '',
     telephonePere: '',
     telephoneMere: '',
@@ -182,7 +220,12 @@ if (recherche) {
     email: '',
     motDePasse: '',
     cours: [],
-    actif: true
+    actif: true,
+    prixTotal: 0,
+    paye: false,
+    pourcentageBourse: 0,
+    typePaiement: 'Cash',
+    anneeScolaire: ''
   });
   setImageFile(null);
   setMessageAjout('');
@@ -213,6 +256,7 @@ const handleSubmitAjout = async (e) => {
     formData.append('nomComplet', formAjout.nomComplet);
     formData.append('genre', formAjout.genre);
     formData.append('dateNaissance', formAjout.dateNaissance);
+    formData.append('niveau', formAjout.niveau);
     formData.append('telephoneEtudiant', formAjout.telephoneEtudiant);
     formData.append('telephonePere', formAjout.telephonePere);
     formData.append('telephoneMere', formAjout.telephoneMere);
@@ -225,12 +269,12 @@ const handleSubmitAjout = async (e) => {
     formData.append('paye', formAjout.paye);
     formData.append('pourcentageBourse', formAjout.pourcentageBourse);
     formData.append('typePaiement', formAjout.typePaiement);
-    formData.append('anneeScolaire', formAjout.anneeScolaire); // Remplace dateEtReglement
+    formData.append('anneeScolaire', formAjout.anneeScolaire);
 
     formAjout.cours.forEach(c => formData.append('cours[]', c));
     if (imageFile) formData.append('image', imageFile);
 
-    const response = await axios.post('http://195.179.229.230:5004/api/etudiants', formData, {
+    const response = await axios.post('http://localhost:5000/api/etudiants', formData, {
       headers: {
         Authorization: `Bearer ${token}`,
         'Content-Type': 'multipart/form-data'
@@ -239,14 +283,15 @@ const handleSubmitAjout = async (e) => {
 
     setMessageAjout('✅ Étudiant ajouté avec succès');
     
-    // Ajouter le nouvel étudiant à la liste
-    setEtudiants([...etudiants, response.data]);
+    // Recharger automatiquement la liste des étudiants
+    await fetchEtudiants();
     
     // Réinitialiser le formulaire
     setFormAjout({
       nomComplet: '',
       genre: 'Homme',
       dateNaissance: '',
+      niveau: '6ème Collège',
       telephoneEtudiant: '',
       telephonePere: '',
       telephoneMere: '',
@@ -255,7 +300,12 @@ const handleSubmitAjout = async (e) => {
       email: '',
       motDePasse: '',
       cours: [],
-      actif: true
+      actif: true,
+      prixTotal: 0,
+      paye: false,
+      pourcentageBourse: 0,
+      typePaiement: 'Cash',
+      anneeScolaire: ''
     });
     setImageFile(null);
     
@@ -279,6 +329,7 @@ const handleSubmitAjout = async (e) => {
     nomComplet: etudiant.nomComplet || '',
     genre: etudiant.genre || 'Homme',
     dateNaissance: etudiant.dateNaissance ? etudiant.dateNaissance.slice(0, 10) : '',
+    niveau: etudiant.niveau || '6ème Collège',
     telephoneEtudiant: etudiant.telephoneEtudiant || '',
     telephonePere: etudiant.telephonePere || '',
     telephoneMere: etudiant.telephoneMere || '',
@@ -292,7 +343,7 @@ const handleSubmitAjout = async (e) => {
     paye: etudiant.paye ?? false,
     pourcentageBourse: etudiant.pourcentageBourse ?? 0,
     typePaiement: etudiant.typePaiement || 'Cash',
-    anneeScolaire: etudiant.anneeScolaire || '' // Remplace dateEtReglement
+    anneeScolaire: etudiant.anneeScolaire || ''
   });
   setImageFileModifier(null);
   setMessageModifier('');
@@ -306,6 +357,7 @@ const closeEditModal = () => {
     nomComplet: '',
     genre: 'Homme',
     dateNaissance: '',
+    niveau: '6ème Collège',
     telephoneEtudiant: '',
     telephonePere: '',
     telephoneMere: '',
@@ -314,7 +366,12 @@ const closeEditModal = () => {
     email: '',
     motDePasse: '',
     cours: [],
-    actif: true
+    actif: true,
+    prixTotal: 0,
+    paye: false,
+    pourcentageBourse: 0,
+    typePaiement: 'Cash',
+    anneeScolaire: ''
   });
   setImageFileModifier(null);
   setMessageModifier('');
@@ -345,6 +402,7 @@ const closeEditModal = () => {
     formData.append('nomComplet', formModifier.nomComplet);
     formData.append('genre', formModifier.genre);
     formData.append('dateNaissance', formModifier.dateNaissance);
+    formData.append('niveau', formModifier.niveau);
     formData.append('telephoneEtudiant', formModifier.telephoneEtudiant);
     formData.append('telephonePere', formModifier.telephonePere);
     formData.append('telephoneMere', formModifier.telephoneMere);
@@ -359,12 +417,12 @@ const closeEditModal = () => {
     formData.append('paye', formModifier.paye);
     formData.append('pourcentageBourse', formModifier.pourcentageBourse);
     formData.append('typePaiement', formModifier.typePaiement);
-    formData.append('anneeScolaire', formModifier.anneeScolaire); // Remplace dateEtReglement
+    formData.append('anneeScolaire', formModifier.anneeScolaire);
 
     formModifier.cours.forEach(c => formData.append('cours[]', c));
     if (imageFileModifier) formData.append('image', imageFileModifier);
 
-    const response = await axios.put(`http://195.179.229.230:5004/api/etudiants/${etudiantAModifier._id}`, formData, {
+    const response = await axios.put(`http://localhost:5000/api/etudiants/${etudiantAModifier._id}`, formData, {
       headers: {
         Authorization: `Bearer ${token}`,
         'Content-Type': 'multipart/form-data'
@@ -373,8 +431,8 @@ const closeEditModal = () => {
 
     setMessageModifier('✅ Étudiant modifié avec succès');
     
-    // Mettre à jour la liste des étudiants
-    setEtudiants(etudiants.map(e => e._id === etudiantAModifier._id ? response.data : e));
+    // Recharger automatiquement la liste des étudiants
+    await fetchEtudiants();
     
     // Fermer le modal après 2 secondes
     setTimeout(() => {
@@ -392,7 +450,7 @@ const closeEditModal = () => {
   const handleToggleActif = async (id) => {
     try {
       const token = localStorage.getItem('token');
-      const res = await axios.patch(`http://195.179.229.230:5004/api/etudiants/${id}/actif`, {}, {
+      const res = await axios.patch(`http://localhost:5000/api/etudiants/${id}/actif`, {}, {
         headers: { Authorization: `Bearer ${token}` }
       });
       setEtudiants(etudiants.map(e => e._id === id ? res.data : e));
@@ -406,7 +464,7 @@ const closeEditModal = () => {
 
     try {
       const token = localStorage.getItem('token');
-      await axios.delete(`http://195.179.229.230:5004/api/etudiants/${id}`, {
+      await axios.delete(`http://localhost:5000/api/etudiants/${id}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       setEtudiants(etudiants.filter(e => e._id !== id));
@@ -433,6 +491,7 @@ const closeEditModal = () => {
     setRecherche('');
     setFiltreGenre('');
     setFiltreCours('');
+    setFiltreNiveau('');
     setFiltreActif('');
   };
 
@@ -538,6 +597,21 @@ const closeEditModal = () => {
               <option value="Femme">Femme</option>
             </select>
           </div>
+
+          <div className="filtre-groupe">
+            <label>Niveau:</label>
+            <select
+              value={filtreNiveau}
+              onChange={(e) => setFiltreNiveau(e.target.value)}
+              className="select-filtre"
+            >
+              <option value="">Tous les niveaux</option>
+              {niveauxDisponibles.map(niveau => (
+                <option key={niveau} value={niveau}>{niveau}</option>
+              ))}
+            </select>
+          </div>
+          
           <div className="filtre-groupe">
             <label>Classe:</label>
             <select
@@ -580,11 +654,11 @@ const closeEditModal = () => {
         <tr>
           <th>Nom Complet</th>
           <th>Genre</th>
+          <th>Niveau</th>
           <th>Date de Naissance</th>
           <th>Âge</th>
           <th>Tél. Étudiant</th>
           <th>Code Massar</th>
-          <th>Email</th>
           <th>Classe</th>
           <th>Statut</th>
           <th>Image</th>
@@ -594,7 +668,7 @@ const closeEditModal = () => {
       <tbody>
         {etudiantsActuels.length === 0 ? (
           <tr>
-            <td colSpan="11" className="aucun-resultat">
+            <td colSpan="12" className="aucun-resultat">
               Aucun étudiant trouvé
             </td>
           </tr>
@@ -603,11 +677,16 @@ const closeEditModal = () => {
             <tr key={e._id}>
               <td className="nom-colonne">{e.nomComplet}</td>
               <td>{e.genre}</td>
+              <td className="niveau-colonne">
+                <span className="niveau-badge">
+                  <GraduationCap size={16} className="inline mr-1" />
+                  {e.niveau || 'Non défini'}
+                </span>
+              </td>
               <td>{formatDate(e.dateNaissance)}</td>
               <td>{calculerAge(e.dateNaissance)} ans</td>
               <td>{e.telephoneEtudiant}</td>
               <td>{e.codeMassar}</td>
-              <td>{e.email}</td>
               <td className="cours-colonne">
                 {(Array.isArray(e.cours) && e.cours.length > 0) ? e.cours.join(', ') : ''}
               </td>
@@ -629,7 +708,7 @@ const closeEditModal = () => {
               <td className="image-colonne">
                 {e.image ? (
                   <img 
-                    src={`http://195.179.229.230:5004${e.image}`} 
+                    src={`http://localhost:5000${e.image}`} 
                     alt="etudiant" 
                     className="image-etudiant"
                   />
@@ -642,19 +721,20 @@ const closeEditModal = () => {
                   onClick={() => handleView(e)}
                   className="btn-voir"
                 >
-                   Voir
+              <Eye size={16} />
                 </button>
                 <button 
                   onClick={() => handleEdit(e)}
                   className="btn-modifier"
                 >
-                   Modifier
+                            <Edit size={16} />
+
                 </button>
                 <button 
                   onClick={() => handleDelete(e._id)}
                   className="btn-supprimer"
                 >
-                   Supprimer
+              <Trash2 size={16} />
                 </button>
               </td>
             </tr>
@@ -679,7 +759,7 @@ const closeEditModal = () => {
             <div className="carte-image">
               {e.image ? (
                 <img 
-                  src={`http://195.179.229.230:5004${e.image}`} 
+                  src={`http://localhost:5000${e.image}`} 
                   alt="etudiant" 
                   className="carte-photo"
                 />
@@ -703,6 +783,12 @@ const closeEditModal = () => {
                 <span className="carte-label">Genre:</span>
                 <span>
                   <User size={16} className="inline mr-1" /> {e.genre}
+                </span>
+              </div>
+              <div className="carte-detail">
+                <span className="carte-label">Niveau:</span>
+                <span>
+                  <GraduationCap size={16} className="inline mr-1" /> {e.niveau || 'Non défini'}
                 </span>
               </div>
               <div className="carte-detail">
@@ -849,6 +935,15 @@ const closeEditModal = () => {
 
               <div className="form-row">
                 <div className="form-group">
+                  <label>Niveau *</label>
+                  <select name="niveau" value={formAjout.niveau} onChange={handleChangeAjout} required>
+                    {niveauxDisponibles.map(niveau => (
+                      <option key={niveau} value={niveau}>{niveau}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="form-group">
                   <label>Date de Naissance *</label>
                   <input
                     type="date"
@@ -858,7 +953,9 @@ const closeEditModal = () => {
                     required
                   />
                 </div>
+              </div>
 
+              <div className="form-row">
                 <div className="form-group">
                   <label>Code Massar *</label>
                   <input
@@ -870,9 +967,7 @@ const closeEditModal = () => {
                     required
                   />
                 </div>
-              </div>
 
-              <div className="form-row">
                 <div className="form-group">
                   <label>Téléphone Étudiant *</label>
                   <input
@@ -884,7 +979,9 @@ const closeEditModal = () => {
                     required
                   />
                 </div>
+              </div>
 
+              <div className="form-row">
                 <div className="form-group">
                   <label>Email *</label>
                   <input
@@ -894,6 +991,19 @@ const closeEditModal = () => {
                     value={formAjout.email}
                     onChange={handleChangeAjout}
                     required
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label>Mot de Passe *</label>
+                  <input
+                    type="password"
+                    name="motDePasse"
+                    placeholder="Mot de passe (minimum 6 caractères)"
+                    value={formAjout.motDePasse}
+                    onChange={handleChangeAjout}
+                    required
+                    minLength="6"
                   />
                 </div>
               </div>
@@ -920,19 +1030,6 @@ const closeEditModal = () => {
                     onChange={handleChangeAjout}
                   />
                 </div>
-              </div>
-
-              <div className="form-group">
-                <label>Mot de Passe *</label>
-                <input
-                  type="password"
-                  name="motDePasse"
-                  placeholder="Mot de passe (minimum 6 caractères)"
-                  value={formAjout.motDePasse}
-                  onChange={handleChangeAjout}
-                  required
-                  minLength="6"
-                />
               </div>
 
               <div className="form-group">
@@ -993,53 +1090,59 @@ const closeEditModal = () => {
                 </div>
               </div>
 
-              <div className="form-group">
-                <label>Prix Total</label>
-                <input
-                  type="number"
-                  name="prixTotal"
-                  placeholder="Prix total"
-                  value={formAjout.prixTotal}
-                  onChange={handleChangeAjout}
-                  min="0"
-                  step="0.01"
-                />
+              <div className="form-row">
+                <div className="form-group">
+                  <label>Prix Total</label>
+                  <input
+                    type="number"
+                    name="prixTotal"
+                    placeholder="Prix total"
+                    value={formAjout.prixTotal}
+                    onChange={handleChangeAjout}
+                    min="0"
+                    step="0.01"
+                  />
+                </div>
+                <div className="form-group">
+                  <label>Payé</label>
+                  <select name="paye" value={formAjout.paye} onChange={handleChangeAjout}>
+                    <option value={true}>Oui</option>
+                    <option value={false}>Non</option>
+                  </select>
+                </div>
               </div>
-              <div className="form-group">
-                <label>Payé</label>
-                <select name="paye" value={formAjout.paye} onChange={handleChangeAjout}>
-                  <option value={true}>Oui</option>
-                  <option value={false}>Non</option>
-                </select>
+
+              <div className="form-row">
+                <div className="form-group">
+                  <label>Pourcentage Bourse (%)</label>
+                  <input
+                    type="number"
+                    name="pourcentageBourse"
+                    placeholder="Pourcentage bourse"
+                    value={formAjout.pourcentageBourse}
+                    onChange={handleChangeAjout}
+                    min="0"
+                    max="100"
+                    step="1"
+                  />
+                </div>
+                <div className="form-group">
+                  <label>Type Paiement</label>
+                  <select name="typePaiement" value={formAjout.typePaiement} onChange={handleChangeAjout}>
+                    <option value="Cash">Cash</option>
+                    <option value="Virement">Virement</option>
+                    <option value="Chèque">Chèque</option>
+                    <option value="En ligne">En ligne</option>
+                  </select>
+                </div>
               </div>
-              <div className="form-group">
-                <label>Pourcentage Bourse (%)</label>
-                <input
-                  type="number"
-                  name="pourcentageBourse"
-                  placeholder="Pourcentage bourse"
-                  value={formAjout.pourcentageBourse}
-                  onChange={handleChangeAjout}
-                  min="0"
-                  max="100"
-                  step="1"
-                />
-              </div>
-              <div className="form-group">
-                <label>Type Paiement</label>
-                <select name="typePaiement" value={formAjout.typePaiement} onChange={handleChangeAjout}>
-                  <option value="Cash">Cash</option>
-                  <option value="Virement">Virement</option>
-                  <option value="Chèque">Chèque</option>
-                  <option value="En ligne">En ligne</option>
-                </select>
-              </div>
+
               <div className="form-group">
                 <label>Année Scolaire *</label>
                 <input
                   type="text"
                   name="anneeScolaire"
-                  placeholder="ex: 2023/2024"
+                  placeholder="ex: 2025/2026"
                   value={formAjout.anneeScolaire}
                   onChange={handleChangeAjout}
                   required
@@ -1077,81 +1180,127 @@ const closeEditModal = () => {
             </div>
             
             <form onSubmit={handleSubmitModifier} className="form-ajout-etudiant">
-              <div className="form-group">
-                <label>Nom Complet *</label>
-                <input
-                  type="text"
-                  name="nomComplet"
-                  placeholder="Nom complet"
-                  value={formModifier.nomComplet}
-                  onChange={handleChangeModifier}
-                  required
-                />
+              <div className="form-row">
+                <div className="form-group">
+                  <label>Nom Complet *</label>
+                  <input
+                    type="text"
+                    name="nomComplet"
+                    placeholder="Nom complet"
+                    value={formModifier.nomComplet}
+                    onChange={handleChangeModifier}
+                    required
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label>Genre *</label>
+                  <select name="genre" value={formModifier.genre} onChange={handleChangeModifier}>
+                    <option value="Homme">Homme</option>
+                    <option value="Femme">Femme</option>
+                  </select>
+                </div>
               </div>
 
-              <div className="form-group">
-                <label>Genre *</label>
-                <select name="genre" value={formModifier.genre} onChange={handleChangeModifier}>
-                  <option value="Homme">Homme</option>
-                  <option value="Femme">Femme</option>
-                </select>
+              <div className="form-row">
+                <div className="form-group">
+                  <label>Niveau *</label>
+                  <select name="niveau" value={formModifier.niveau} onChange={handleChangeModifier} required>
+                    {niveauxDisponibles.map(niveau => (
+                      <option key={niveau} value={niveau}>{niveau}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="form-group">
+                  <label>Date de Naissance *</label>
+                  <input
+                    type="date"
+                    name="dateNaissance"
+                    value={formModifier.dateNaissance}
+                    onChange={handleChangeModifier}
+                    required
+                  />
+                </div>
               </div>
 
-              <div className="form-group">
-                <label>Date de Naissance *</label>
-                <input
-                  type="date"
-                  name="dateNaissance"
-                  value={formModifier.dateNaissance}
-                  onChange={handleChangeModifier}
-                  required
-                />
+              <div className="form-row">
+                <div className="form-group">
+                  <label>Code Massar *</label>
+                  <input
+                    type="text"
+                    name="codeMassar"
+                    placeholder="Code Massar"
+                    value={formModifier.codeMassar}
+                    onChange={handleChangeModifier}
+                    required
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label>Téléphone Étudiant *</label>
+                  <input
+                    type="text"
+                    name="telephoneEtudiant"
+                    placeholder="Téléphone de l'étudiant"
+                    value={formModifier.telephoneEtudiant}
+                    onChange={handleChangeModifier}
+                    required
+                  />
+                </div>
               </div>
 
-              <div className="form-group">
-                <label>Téléphone Étudiant *</label>
-                <input
-                  type="text"
-                  name="telephoneEtudiant"
-                  placeholder="Téléphone de l'étudiant"
-                  value={formModifier.telephoneEtudiant}
-                  onChange={handleChangeModifier}
-                  required
-                />
+              <div className="form-row">
+                <div className="form-group">
+                  <label>Email *</label>
+                  <input
+                    type="email"
+                    name="email"
+                    placeholder="Email"
+                    value={formModifier.email}
+                    onChange={handleChangeModifier}
+                    required
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label>Nouveau Mot de Passe</label>
+                  <input
+                    type="password"
+                    name="motDePasse"
+                    placeholder="Laisser vide pour garder l'ancien"
+                    value={formModifier.motDePasse}
+                    onChange={handleChangeModifier}
+                    minLength="6"
+                  />
+                  <small style={{color: '#666', fontSize: '12px'}}>
+                    Laisser vide pour conserver le mot de passe actuel
+                  </small>
+                </div>
               </div>
 
-              <div className="form-group">
-                <label>Téléphone Père</label>
-                <input
-                  type="text"
-                  name="telephonePere"
-                  placeholder="Téléphone du père"
-                  value={formModifier.telephonePere}
-                  onChange={handleChangeModifier}
-                />
-              </div>
+              <div className="form-row">
+                <div className="form-group">
+                  <label>Téléphone Père</label>
+                  <input
+                    type="text"
+                    name="telephonePere"
+                    placeholder="Téléphone du père"
+                    value={formModifier.telephonePere}
+                    onChange={handleChangeModifier}
+                  />
+                </div>
 
-              <div className="form-group">
-                <label>Téléphone Mère</label>
-                <input
-                  type="text"
-                  name="telephoneMere"
-                  placeholder="Téléphone de la mère"
-                  value={formModifier.telephoneMere}
-                  onChange={handleChangeModifier}
-                />
-              </div>
-
-              <div className="form-group">
-                <label>Code Massar *</label>
-                <input
-                  type="text"
-                  name="codeMassar"
-                  placeholder="Code Massar"
-                  value={formModifier.codeMassar}
-                  onChange={handleChangeModifier}
-                  required
-                />
+                <div className="form-group">
+                  <label>Téléphone Mère</label>
+                  <input
+                    type="text"
+                    name="telephoneMere"
+                    placeholder="Téléphone de la mère"
+                    value={formModifier.telephoneMere}
+                    onChange={handleChangeModifier}
+                  />
+                </div>
               </div>
 
               <div className="form-group">
@@ -1163,33 +1312,6 @@ const closeEditModal = () => {
                   onChange={handleChangeModifier}
                   rows="3"
                 />
-              </div>
-
-              <div className="form-group">
-                <label>Email *</label>
-                <input
-                  type="email"
-                  name="email"
-                  placeholder="Email"
-                  value={formModifier.email}
-                  onChange={handleChangeModifier}
-                  required
-                />
-              </div>
-
-              <div className="form-group">
-                <label>Nouveau Mot de Passe</label>
-                <input
-                  type="password"
-                  name="motDePasse"
-                  placeholder="Laisser vide pour garder l'ancien"
-                  value={formModifier.motDePasse}
-                  onChange={handleChangeModifier}
-                  minLength="6"
-                />
-                <small style={{color: '#666', fontSize: '12px'}}>
-                  Laisser vide pour conserver le mot de passe actuel
-                </small>
               </div>
 
               <div className="form-group">
@@ -1227,7 +1349,7 @@ const closeEditModal = () => {
                   <div className="image-actuelle">
                     <small>Image actuelle :</small>
                     <img 
-                      src={`http://195.179.229.230:5004${etudiantAModifier.image}`} 
+                      src={`http://localhost:5000${etudiantAModifier.image}`} 
                       alt="Image actuelle" 
                       className="image-preview"
                       style={{width: '50px', height: '50px', objectFit: 'cover', borderRadius: '4px'}}
@@ -1248,53 +1370,59 @@ const closeEditModal = () => {
                 </label>
               </div>
 
-              <div className="form-group">
-                <label>Prix Total</label>
-                <input
-                  type="number"
-                  name="prixTotal"
-                  placeholder="Prix total"
-                  value={formModifier.prixTotal}
-                  onChange={handleChangeModifier}
-                  min="0"
-                  step="0.01"
-                />
+              <div className="form-row">
+                <div className="form-group">
+                  <label>Prix Total</label>
+                  <input
+                    type="number"
+                    name="prixTotal"
+                    placeholder="Prix total"
+                    value={formModifier.prixTotal}
+                    onChange={handleChangeModifier}
+                    min="0"
+                    step="0.01"
+                  />
+                </div>
+                <div className="form-group">
+                  <label>Payé</label>
+                  <select name="paye" value={formModifier.paye} onChange={handleChangeModifier}>
+                    <option value={true}>Oui</option>
+                    <option value={false}>Non</option>
+                  </select>
+                </div>
               </div>
-              <div className="form-group">
-                <label>Payé</label>
-                <select name="paye" value={formModifier.paye} onChange={handleChangeModifier}>
-                  <option value={true}>Oui</option>
-                  <option value={false}>Non</option>
-                </select>
+
+              <div className="form-row">
+                <div className="form-group">
+                  <label>Pourcentage Bourse (%)</label>
+                  <input
+                    type="number"
+                    name="pourcentageBourse"
+                    placeholder="Pourcentage bourse"
+                    value={formModifier.pourcentageBourse}
+                    onChange={handleChangeModifier}
+                    min="0"
+                    max="100"
+                    step="1"
+                  />
+                </div>
+                <div className="form-group">
+                  <label>Type Paiement</label>
+                  <select name="typePaiement" value={formModifier.typePaiement} onChange={handleChangeModifier}>
+                    <option value="Cash">Cash</option>
+                    <option value="Virement">Virement</option>
+                    <option value="Chèque">Chèque</option>
+                    <option value="En ligne">En ligne</option>
+                  </select>
+                </div>
               </div>
-              <div className="form-group">
-                <label>Pourcentage Bourse (%)</label>
-                <input
-                  type="number"
-                  name="pourcentageBourse"
-                  placeholder="Pourcentage bourse"
-                  value={formModifier.pourcentageBourse}
-                  onChange={handleChangeModifier}
-                  min="0"
-                  max="100"
-                  step="1"
-                />
-              </div>
-              <div className="form-group">
-                <label>Type Paiement</label>
-                <select name="typePaiement" value={formModifier.typePaiement} onChange={handleChangeModifier}>
-                  <option value="Cash">Cash</option>
-                  <option value="Virement">Virement</option>
-                  <option value="Chèque">Chèque</option>
-                  <option value="En ligne">En ligne</option>
-                </select>
-              </div>
+
               <div className="form-group">
                 <label>Année Scolaire *</label>
                 <input
                   type="text"
                   name="anneeScolaire"
-                  placeholder="ex: 2023/2024"
+                  placeholder="ex: 2025/2026"
                   value={formModifier.anneeScolaire}
                   onChange={handleChangeModifier}
                   required
@@ -1338,7 +1466,7 @@ const closeEditModal = () => {
                 <div className="etudiant-image-section">
                   {etudiantSelectionne.image ? (
                     <img 
-                      src={`http://195.179.229.230:5004${etudiantSelectionne.image}`} 
+                      src={`http://localhost:5000${etudiantSelectionne.image}`} 
                       alt="Photo de l'étudiant" 
                       className="etudiant-image-large"
                     />
@@ -1371,6 +1499,13 @@ const closeEditModal = () => {
                   <div className="info-label">Genre</div>
                   <div className="info-value">
                     <User size={16} className="inline mr-1" /> {etudiantSelectionne.genre}
+                  </div>
+                </div>
+
+                <div className="info-card">
+                  <div className="info-label">Niveau</div>
+                  <div className="info-value">
+                    <GraduationCap size={16} className="inline mr-1" /> {etudiantSelectionne.niveau || 'Non défini'}
                   </div>
                 </div>
 
@@ -1423,6 +1558,11 @@ const closeEditModal = () => {
                   <div className="info-value">
                     <Mail size={16} className="inline mr-1" /> {etudiantSelectionne.email}
                   </div>
+                </div>
+
+                <div className="info-card">
+                  <div className="info-label">Année Scolaire</div>
+                  <div className="info-value">{etudiantSelectionne.anneeScolaire || 'Non définie'}</div>
                 </div>
 
                 {etudiantSelectionne.adresse && (

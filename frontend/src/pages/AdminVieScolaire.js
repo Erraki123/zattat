@@ -65,7 +65,7 @@ const AdminVieScolaire = () => {
 
   const fetchActivities = async () => {
     try {
-      const res = await fetch('http://195.179.229.230:5004/api/vie-scolaire');
+      const res = await fetch('http://localhost:5000/api/vie-scolaire');
       const data = await res.json();
       setActivities(data.data);
     } catch (err) {
@@ -83,8 +83,8 @@ const AdminVieScolaire = () => {
     images.forEach((img) => data.append('images', img));
 
     const url = editingId
-      ? `http://195.179.229.230:5004/api/vie-scolaire/${editingId}`
-      : 'http://195.179.229.230:5004/api/vie-scolaire';
+      ? `http://localhost:5000/api/vie-scolaire/${editingId}`
+      : 'http://localhost:5000/api/vie-scolaire';
 
     const method = editingId ? 'PUT' : 'POST';
 
@@ -128,7 +128,7 @@ const AdminVieScolaire = () => {
     if (!window.confirm('Supprimer cette activité ?')) return;
 
     try {
-      const res = await fetch(`http://195.179.229.230:5004/api/vie-scolaire/${id}`, {
+      const res = await fetch(`http://localhost:5000/api/vie-scolaire/${id}`, {
         method: 'DELETE',
         headers: {
           Authorization: `Bearer ${token}`,
@@ -743,7 +743,7 @@ const AdminVieScolaire = () => {
               {/* Image de l'activité */}
               {act.images && act.images.length > 0 ? (
                 <img
-                  src={`http://195.179.229.230:5004${act.images[0]}`}
+                  src={`http://localhost:5000${act.images[0]}`}
                   alt={act.title}
                   style={styles.cardImage}
                   onError={(e) => {
@@ -1165,7 +1165,7 @@ const AdminVieScolaire = () => {
               {selectedActivity.images && selectedActivity.images.length > 0 && (
                 <div style={styles.imageGallery}>
                   <img
-                    src={`http://195.179.229.230:5004${selectedActivity.images[currentImageIndex]}`}
+                    src={`http://localhost:5000${selectedActivity.images[currentImageIndex]}`}
                     alt={selectedActivity.title}
                     style={styles.galleryImage}
                   />
@@ -1205,7 +1205,7 @@ const AdminVieScolaire = () => {
                       {selectedActivity.images.map((image, index) => (
                         <img
                           key={index}
-                          src={`http://195.179.229.230:5004${image}`}
+                          src={`http://localhost:5000${image}`}
                           alt={`${selectedActivity.title} ${index + 1}`}
                           style={{
                             ...styles.thumbnail,
@@ -1356,7 +1356,7 @@ const AdminVieScolaire = () => {
                       {selectedActivity.images.map((image, index) => (
                         <img
                           key={index}
-                          src={`http://195.179.229.230:5004${image}`}
+                          src={`http://localhost:5000${image}`}
                           alt={`${selectedActivity.title} ${index + 1}`}
                           style={{
                             ...styles.thumbnail,

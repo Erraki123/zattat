@@ -1,20 +1,27 @@
 {
-  "short_name": "Zettat",
-  "name": "Zettat Gestion Étudiants",
+  "short_name": "AK",
+  "name": "Alfred Kastler",
+  "description": "Application de gestion scolaire Alfred Kastler",
   "icons": [
     {
-      "src": "icons/icon-192x192.png",
+      "src": "/images/logo-ak-removebg-preview (1).png",
       "type": "image/png",
-      "sizes": "192x192"
+      "sizes": "192x192",
+      "purpose": "any maskable"
     },
     {
-      "src": "icons/icon-512x512.png",
+      "src": "/icons/logo-ak-removebg-preview (2).png",
       "type": "image/png",
-      "sizes": "512x512"
+      "sizes": "512x512",
+      "purpose": "any maskable"
     }
   ],
-  "start_url": ".",
+  "start_url": "/",
   "display": "standalone",
-  "theme_color": "#ffffff",
-  "background_color": "#ffffff"
+  "orientation": "portrait",
+  "theme_color": "#4f46e5",
+  "background_color": "#ffffff",
+  "scope": "/",
+  "categories": ["education", "productivity"],
+  "lang": "fr"
 }

@@ -21,8 +21,6 @@ const multer = require('multer');
 const path = require('path');
 const uploadMessageFile = require('./middlewares/uploadMessageFile');
 const Rappel = require('./models/RappelPaiement');
-const QrWeekPlanning = require('./models/QrWeekPlanning');
-const QrSession = require('./models/QrSession');
 const Cours = require('./models/coursModel');
 const Evenement = require('./models/evenementModel');
 const Presence = require('./models/presenceModel');
@@ -482,7 +480,7 @@ app.post('/api/etudiants', authAdmin, upload.single('image'), async (req, res) =
       adresse,
       email,
       motDePasse,
-      // NOUVEAUX CHAMPS DE PAIEMENT
+      niveau, // Ajout du champ niveau qui était dans le schéma mais pas dans la route
       prixTotal,
       paye,
       pourcentageBourse,
@@ -493,15 +491,36 @@ app.post('/api/etudiants', authAdmin, upload.single('image'), async (req, res) =
     let { cours, actif } = req.body;
 
     // ===== VALIDATION DES CHAMPS OBLIGATOIRES =====
-    if (!nomComplet || !genre || !dateNaissance || !telephoneEtudiant || !codeMassar || !email || !motDePasse || !anneeScolaire) {
+    const champsObligatoires = {
+      nomComplet: 'Nom complet',
+      genre: 'Genre',
+      dateNaissance: 'Date de naissance',
+      telephoneEtudiant: 'Téléphone étudiant',
+      codeMassar: 'Code Massar',
+      email: 'Email',
+      motDePasse: 'Mot de passe',
+      niveau: 'Niveau scolaire',
+      anneeScolaire: 'Année scolaire'
+    };
+
+    const champsManquants = [];
+    for (const [champ, nom] of Object.entries(champsObligatoires)) {
+      if (!req.body[champ] || req.body[champ].toString().trim() === '') {
+        champsManquants.push(nom);
+      }
+    }
+
+    if (champsManquants.length > 0) {
       return res.status(400).json({
-        message: 'Les champs nomComplet, genre, dateNaissance, telephoneEtudiant, codeMassar, email, motDePasse et anneeScolaire sont obligatoires'
+        message: `Les champs suivants sont obligatoires: ${champsManquants.join(', ')}`
       });
     }
 
+    // ===== VALIDATION DES FORMATS =====
+    
     // Validation de l'email
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email)) {
+    if (!emailRegex.test(email.trim())) {
       return res.status(400).json({ message: 'Format d\'email invalide' });
     }
 
@@ -512,31 +531,62 @@ app.post('/api/etudiants', authAdmin, upload.single('image'), async (req, res) =
 
     // Validation de l'année scolaire
     const anneeScolaireRegex = /^\d{4}\/\d{4}$/;
-    if (!anneeScolaireRegex.test(anneeScolaire)) {
+    if (!anneeScolaireRegex.test(anneeScolaire.trim())) {
       return res.status(400).json({ message: 'L\'année scolaire doit être au format YYYY/YYYY (ex: 2025/2026)' });
+    }
+
+    // Validation du niveau scolaire
+    const niveaux = [
+      "6ème Collège", "5ème Collège", "4ème Collège", "3ème Collège",
+      "Tronc Commun Scientifique", "Tronc Commun Littéraire", "Tronc Commun Technique",
+      "1BAC SM", "1BAC PC", "1BAC SVT", "1BAC Lettres", "1BAC Économie", "1BAC Technique",
+      "2BAC SMA", "2BAC SMB", "2BAC PC", "2BAC SVT", "2BAC Lettres", "2BAC Économie", "2BAC Technique"
+    ];
+    
+    if (!niveaux.includes(niveau)) {
+      return res.status(400).json({ 
+        message: 'Niveau scolaire invalide',
+        niveauxValides: niveaux
+      });
+    }
+
+    // Validation du genre
+    if (!['Homme', 'Femme'].includes(genre)) {
+      return res.status(400).json({ message: 'Le genre doit être "Homme" ou "Femme"' });
+    }
+
+    // Validation des numéros de téléphone
+    const phoneRegex = /^[0-9+\-\s]{8,15}$/;
+    if (!phoneRegex.test(telephoneEtudiant.trim())) {
+      return res.status(400).json({ message: 'Format de téléphone étudiant invalide' });
+    }
+
+    if (telephonePere && telephonePere.trim() && !phoneRegex.test(telephonePere.trim())) {
+      return res.status(400).json({ message: 'Format de téléphone père invalide' });
+    }
+
+    if (telephoneMere && telephoneMere.trim() && !phoneRegex.test(telephoneMere.trim())) {
+      return res.status(400).json({ message: 'Format de téléphone mère invalide' });
     }
 
     // ===== VÉRIFICATION D'UNICITÉ =====
     
-    // Vérifier que l'email n'est pas déjà utilisé
-    const existe = await Etudiant.findOne({ email });
-    if (existe) {
+    // Vérifications en parallèle pour optimiser les performances
+    const [emailExistant, massarExistant] = await Promise.all([
+      Etudiant.findOne({ email: email.toLowerCase().trim() }),
+      Etudiant.findOne({ codeMassar: codeMassar.trim() })
+    ]);
+
+    if (emailExistant) {
       return res.status(400).json({ message: 'Email déjà utilisé par un autre étudiant' });
     }
 
-    // Vérifier que le Code Massar n'est pas déjà utilisé
-    const massarExiste = await Etudiant.findOne({ codeMassar });
-    if (massarExiste) {
+    if (massarExistant) {
       return res.status(400).json({ message: 'Code Massar déjà utilisé par un autre étudiant' });
     }
 
-    // ===== TRAITEMENT DES DONNÉES =====
+    // ===== TRAITEMENT ET VALIDATION DES DONNÉES =====
     
-    // S'assurer que cours est un tableau
-    if (typeof cours === 'string') {
-      cours = [cours];
-    }
-
     // Fonctions utilitaires pour la conversion des données
     const toBool = (v) => v === 'true' || v === true;
     const toNumber = (v) => {
@@ -551,55 +601,63 @@ app.post('/api/etudiants', authAdmin, upload.single('image'), async (req, res) =
       return isNaN(date.getTime()) ? null : date;
     };
 
-    // Conversion des booléens
-    const actifBool = toBool(actif);
-    const payeBool = toBool(paye);
-
-    // Conversion des nombres
+    // Conversion et validation des données numériques
     const prixTotalNum = toNumber(prixTotal);
     const pourcentageBourseNum = toNumber(pourcentageBourse);
 
-    // Validation du pourcentage de bourse
-    if (pourcentageBourseNum < 0 || pourcentageBourseNum > 100) {
-      return res.status(400).json({ message: 'Le pourcentage de bourse doit être entre 0 et 100' });
-    }
-
-    // Validation du prix total
     if (prixTotalNum < 0) {
       return res.status(400).json({ message: 'Le prix total ne peut pas être négatif' });
     }
 
+    if (pourcentageBourseNum < 0 || pourcentageBourseNum > 100) {
+      return res.status(400).json({ message: 'Le pourcentage de bourse doit être entre 0 et 100' });
+    }
+
     // Validation du type de paiement
     const typesValides = ['Cash', 'Virement', 'Chèque', 'En ligne'];
-    if (typePaiement && !typesValides.includes(typePaiement)) {
+    const typePaySelected = typePaiement || 'Cash';
+    if (!typesValides.includes(typePaySelected)) {
       return res.status(400).json({ 
         message: `Type de paiement invalide. Types valides: ${typesValides.join(', ')}` 
       });
     }
 
-    // Conversion de la date de naissance
+    // Conversion et validation de la date de naissance
     const dateNaissanceFormatted = toDate(dateNaissance);
     if (!dateNaissanceFormatted) {
       return res.status(400).json({ message: 'Format de date de naissance invalide' });
     }
 
+    // Vérifier que l'étudiant n'est pas trop jeune ou trop vieux
+    const aujourdhui = new Date();
+    const age = aujourdhui.getFullYear() - dateNaissanceFormatted.getFullYear();
+    if (age < 10 || age > 25) {
+      return res.status(400).json({ message: 'L\'âge de l\'étudiant doit être entre 10 et 25 ans' });
+    }
+
+    // Traitement des cours
+    if (typeof cours === 'string') {
+      cours = cours.split(',').map(c => c.trim()).filter(c => c.length > 0);
+    } else if (!Array.isArray(cours)) {
+      cours = [];
+    }
+
+    // Conversion des booléens
+    const actifBool = actif !== undefined ? toBool(actif) : true; // Par défaut actif
+    const payeBool = toBool(paye);
+
     // ===== TRAITEMENT DE L'IMAGE =====
-    
-    // Chemin de l'image
     const imagePath = req.file ? `/uploads/${req.file.filename}` : '';
 
     // ===== HACHAGE DU MOT DE PASSE =====
-    
-    // Hachage du mot de passe
-    const hashedPassword = await bcrypt.hash(motDePasse, 10);
+    const hashedPassword = await bcrypt.hash(motDePasse, 12); // Augmentation de la sécurité
 
     // ===== CRÉATION DE L'ÉTUDIANT =====
-    
-    // Création du nouvel étudiant avec tous les champs
     const etudiantData = {
       // Champs de base
       nomComplet: nomComplet.trim(),
       genre,
+      niveau,
       dateNaissance: dateNaissanceFormatted,
       telephoneEtudiant: telephoneEtudiant.trim(),
       telephonePere: telephonePere?.trim() || '',
@@ -608,35 +666,47 @@ app.post('/api/etudiants', authAdmin, upload.single('image'), async (req, res) =
       adresse: adresse?.trim() || '',
       email: email.toLowerCase().trim(),
       motDePasse: hashedPassword,
-      cours: cours || [],
+      cours: cours,
       image: imagePath,
       actif: actifBool,
       creeParAdmin: req.adminId,
       
-      // NOUVEAUX CHAMPS DE PAIEMENT
+      // Champs de paiement
       prixTotal: prixTotalNum,
       paye: payeBool,
       pourcentageBourse: pourcentageBourseNum,
-      typePaiement: typePaiement || 'Cash',
+      typePaiement: typePaySelected,
       anneeScolaire: anneeScolaire.trim()
     };
 
+    // Création et sauvegarde de l'étudiant
     const etudiant = new Etudiant(etudiantData);
     const etudiantSauve = await etudiant.save();
 
-    // Préparer la réponse sans le mot de passe
+    // ===== PRÉPARATION DE LA RÉPONSE =====
     const etudiantResponse = etudiantSauve.toObject();
     delete etudiantResponse.motDePasse;
 
+    // Calcul des informations de paiement
+    const montantBourse = (prixTotalNum * pourcentageBourseNum) / 100;
+    const montantAPayer = prixTotalNum - montantBourse;
+    
     res.status(201).json({
       message: 'Étudiant créé avec succès',
       etudiant: etudiantResponse,
-      // Informations supplémentaires sur le paiement
       infosPaiement: {
         montantTotal: prixTotalNum,
-        montantBourse: (prixTotalNum * pourcentageBourseNum) / 100,
-        montantAPayer: prixTotalNum - ((prixTotalNum * pourcentageBourseNum) / 100),
+        montantBourse: montantBourse,
+        montantAPayer: montantAPayer,
+        pourcentageBourse: pourcentageBourseNum,
+        typePaiement: typePaySelected,
         statutPaiement: payeBool ? 'Payé' : (prixTotalNum === 0 ? 'Gratuit' : 'En attente')
+      },
+      metadata: {
+        anneeScolaire: anneeScolaire.trim(),
+        niveau: niveau,
+        nombreCours: cours.length,
+        dateCreation: etudiantSauve.createdAt
       }
     });
 
@@ -664,6 +734,13 @@ app.post('/api/etudiants', authAdmin, upload.single('image'), async (req, res) =
       });
     }
 
+    // Gestion des erreurs de cast (types invalides)
+    if (err.name === 'CastError') {
+      return res.status(400).json({
+        message: `Format invalide pour le champ ${err.path}`
+      });
+    }
+
     res.status(500).json({
       message: 'Erreur interne du serveur',
       error: process.env.NODE_ENV === 'development' ? err.message : 'Une erreur est survenue'
@@ -685,7 +762,7 @@ app.put('/api/etudiants/:id', authAdmin, upload.single('image'), async (req, res
       adresse,
       email,
       motDePasse,
-      // NOUVEAUX CHAMPS DE PAIEMENT
+      niveau, // Ajout du champ niveau
       prixTotal,
       paye,
       pourcentageBourse,
@@ -695,52 +772,114 @@ app.put('/api/etudiants/:id', authAdmin, upload.single('image'), async (req, res
 
     let { cours, actif } = req.body;
 
+    // ===== VALIDATION DE L'ID =====
+    if (!req.params.id || !req.params.id.match(/^[0-9a-fA-F]{24}$/)) {
+      return res.status(400).json({ message: 'ID d\'étudiant invalide' });
+    }
+
+    // ===== VÉRIFICATION DE L'EXISTENCE DE L'ÉTUDIANT =====
+    const etudiantExistant = await Etudiant.findById(req.params.id);
+    if (!etudiantExistant) {
+      return res.status(404).json({ message: 'Étudiant non trouvé' });
+    }
+
     // ===== VALIDATION DES CHAMPS OBLIGATOIRES =====
-    if (!nomComplet || !genre || !dateNaissance || !telephoneEtudiant || !codeMassar || !email || !anneeScolaire) {
+    const champsObligatoires = {
+      nomComplet: 'Nom complet',
+      genre: 'Genre',
+      dateNaissance: 'Date de naissance',
+      telephoneEtudiant: 'Téléphone étudiant',
+      codeMassar: 'Code Massar',
+      email: 'Email',
+      niveau: 'Niveau scolaire',
+      anneeScolaire: 'Année scolaire'
+    };
+
+    const champsManquants = [];
+    for (const [champ, nom] of Object.entries(champsObligatoires)) {
+      if (!req.body[champ] || req.body[champ].toString().trim() === '') {
+        champsManquants.push(nom);
+      }
+    }
+
+    if (champsManquants.length > 0) {
       return res.status(400).json({
-        message: 'Les champs nomComplet, genre, dateNaissance, telephoneEtudiant, codeMassar, email et anneeScolaire sont obligatoires'
+        message: `Les champs suivants sont obligatoires: ${champsManquants.join(', ')}`
       });
     }
 
+    // ===== VALIDATION DES FORMATS =====
+    
     // Validation de l'email
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email)) {
+    if (!emailRegex.test(email.trim())) {
       return res.status(400).json({ message: 'Format d\'email invalide' });
     }
 
     // Validation de l'année scolaire
     const anneeScolaireRegex = /^\d{4}\/\d{4}$/;
-    if (!anneeScolaireRegex.test(anneeScolaire)) {
+    if (!anneeScolaireRegex.test(anneeScolaire.trim())) {
       return res.status(400).json({ message: 'L\'année scolaire doit être au format YYYY/YYYY (ex: 2025/2026)' });
+    }
+
+    // Validation du niveau scolaire
+    const niveaux = [
+      "6ème Collège", "5ème Collège", "4ème Collège", "3ème Collège",
+      "Tronc Commun Scientifique", "Tronc Commun Littéraire", "Tronc Commun Technique",
+      "1BAC SM", "1BAC PC", "1BAC SVT", "1BAC Lettres", "1BAC Économie", "1BAC Technique",
+      "2BAC SMA", "2BAC SMB", "2BAC PC", "2BAC SVT", "2BAC Lettres", "2BAC Économie", "2BAC Technique"
+    ];
+    
+    if (!niveaux.includes(niveau)) {
+      return res.status(400).json({ 
+        message: 'Niveau scolaire invalide',
+        niveauxValides: niveaux
+      });
+    }
+
+    // Validation du genre
+    if (!['Homme', 'Femme'].includes(genre)) {
+      return res.status(400).json({ message: 'Le genre doit être "Homme" ou "Femme"' });
+    }
+
+    // Validation des numéros de téléphone
+    const phoneRegex = /^[0-9+\-\s]{8,15}$/;
+    if (!phoneRegex.test(telephoneEtudiant.trim())) {
+      return res.status(400).json({ message: 'Format de téléphone étudiant invalide' });
+    }
+
+    if (telephonePere && telephonePere.trim() && !phoneRegex.test(telephonePere.trim())) {
+      return res.status(400).json({ message: 'Format de téléphone père invalide' });
+    }
+
+    if (telephoneMere && telephoneMere.trim() && !phoneRegex.test(telephoneMere.trim())) {
+      return res.status(400).json({ message: 'Format de téléphone mère invalide' });
     }
 
     // ===== VÉRIFICATION D'UNICITÉ (sauf pour l'étudiant actuel) =====
     
-    // Vérifier que l'email n'est pas déjà utilisé par un autre étudiant
-    const existe = await Etudiant.findOne({ 
-      email, 
-      _id: { $ne: req.params.id } 
-    });
-    if (existe) {
+    // Vérifications en parallèle pour optimiser les performances
+    const [emailExistant, massarExistant] = await Promise.all([
+      Etudiant.findOne({ 
+        email: email.toLowerCase().trim(), 
+        _id: { $ne: req.params.id } 
+      }),
+      Etudiant.findOne({ 
+        codeMassar: codeMassar.trim(), 
+        _id: { $ne: req.params.id } 
+      })
+    ]);
+
+    if (emailExistant) {
       return res.status(400).json({ message: 'Email déjà utilisé par un autre étudiant' });
     }
 
-    // Vérifier que le Code Massar n'est pas déjà utilisé par un autre étudiant
-    const massarExiste = await Etudiant.findOne({ 
-      codeMassar, 
-      _id: { $ne: req.params.id } 
-    });
-    if (massarExiste) {
+    if (massarExistant) {
       return res.status(400).json({ message: 'Code Massar déjà utilisé par un autre étudiant' });
     }
 
-    // ===== TRAITEMENT DES DONNÉES =====
+    // ===== TRAITEMENT ET VALIDATION DES DONNÉES =====
     
-    // S'assurer que cours est un tableau
-    if (typeof cours === 'string') {
-      cours = [cours];
-    }
-
     // Fonctions utilitaires pour la conversion des données
     const toBool = (v) => v === 'true' || v === true;
     const toNumber = (v) => {
@@ -755,44 +894,57 @@ app.put('/api/etudiants/:id', authAdmin, upload.single('image'), async (req, res
       return isNaN(date.getTime()) ? null : date;
     };
 
-    // Conversion des booléens
-    const actifBool = toBool(actif);
-    const payeBool = toBool(paye);
-
-    // Conversion des nombres
+    // Conversion et validation des données numériques
     const prixTotalNum = toNumber(prixTotal);
     const pourcentageBourseNum = toNumber(pourcentageBourse);
 
-    // Validation du pourcentage de bourse
-    if (pourcentageBourseNum < 0 || pourcentageBourseNum > 100) {
-      return res.status(400).json({ message: 'Le pourcentage de bourse doit être entre 0 et 100' });
-    }
-
-    // Validation du prix total
     if (prixTotalNum < 0) {
       return res.status(400).json({ message: 'Le prix total ne peut pas être négatif' });
     }
 
+    if (pourcentageBourseNum < 0 || pourcentageBourseNum > 100) {
+      return res.status(400).json({ message: 'Le pourcentage de bourse doit être entre 0 et 100' });
+    }
+
     // Validation du type de paiement
     const typesValides = ['Cash', 'Virement', 'Chèque', 'En ligne'];
-    if (typePaiement && !typesValides.includes(typePaiement)) {
+    const typePaySelected = typePaiement || 'Cash';
+    if (!typesValides.includes(typePaySelected)) {
       return res.status(400).json({ 
         message: `Type de paiement invalide. Types valides: ${typesValides.join(', ')}` 
       });
     }
 
-    // Conversion de la date de naissance
+    // Conversion et validation de la date de naissance
     const dateNaissanceFormatted = toDate(dateNaissance);
     if (!dateNaissanceFormatted) {
       return res.status(400).json({ message: 'Format de date de naissance invalide' });
     }
 
+    // Vérifier que l'étudiant n'est pas trop jeune ou trop vieux
+    const aujourdhui = new Date();
+    const age = aujourdhui.getFullYear() - dateNaissanceFormatted.getFullYear();
+    if (age < 10 || age > 25) {
+      return res.status(400).json({ message: 'L\'âge de l\'étudiant doit être entre 10 et 25 ans' });
+    }
+
+    // Traitement des cours
+    if (typeof cours === 'string') {
+      cours = cours.split(',').map(c => c.trim()).filter(c => c.length > 0);
+    } else if (!Array.isArray(cours)) {
+      cours = cours !== undefined ? [] : etudiantExistant.cours; // Garder les cours existants si non fourni
+    }
+
+    // Conversion des booléens avec valeurs par défaut
+    const actifBool = actif !== undefined ? toBool(actif) : etudiantExistant.actif;
+    const payeBool = paye !== undefined ? toBool(paye) : etudiantExistant.paye;
+
     // ===== PRÉPARATION DES DONNÉES DE MISE À JOUR =====
-    
     const updateData = {
       // Champs de base
       nomComplet: nomComplet.trim(),
       genre,
+      niveau,
       dateNaissance: dateNaissanceFormatted,
       telephoneEtudiant: telephoneEtudiant.trim(),
       telephonePere: telephonePere?.trim() || '',
@@ -800,38 +952,45 @@ app.put('/api/etudiants/:id', authAdmin, upload.single('image'), async (req, res
       codeMassar: codeMassar.trim(),
       adresse: adresse?.trim() || '',
       email: email.toLowerCase().trim(),
-      cours: cours || [],
+      cours: cours,
       actif: actifBool,
       
-      // NOUVEAUX CHAMPS DE PAIEMENT
+      // Champs de paiement
       prixTotal: prixTotalNum,
       paye: payeBool,
       pourcentageBourse: pourcentageBourseNum,
-      typePaiement: typePaiement || 'Cash',
+      typePaiement: typePaySelected,
       anneeScolaire: anneeScolaire.trim()
     };
 
     // ===== TRAITEMENT DE L'IMAGE =====
-    
-    // Si une nouvelle image est fournie
     if (req.file) {
       updateData.image = `/uploads/${req.file.filename}`;
+      
+      // Optionnel: Supprimer l'ancienne image du serveur
+      if (etudiantExistant.image && etudiantExistant.image !== '') {
+        const fs = require('fs').promises;
+        const path = require('path');
+        try {
+          const oldImagePath = path.join(__dirname, '..', etudiantExistant.image);
+          await fs.unlink(oldImagePath);
+        } catch (err) {
+          console.warn('⚠️ Impossible de supprimer l\'ancienne image:', err.message);
+        }
+      }
     }
 
     // ===== TRAITEMENT DU MOT DE PASSE =====
-    
-    // Si un nouveau mot de passe est fourni
     if (motDePasse && motDePasse.trim() !== '') {
       // Validation du mot de passe
       if (motDePasse.length < 6) {
         return res.status(400).json({ message: 'Le mot de passe doit contenir au moins 6 caractères' });
       }
-      const hashedPassword = await bcrypt.hash(motDePasse, 10);
+      const hashedPassword = await bcrypt.hash(motDePasse, 12); // Augmentation de la sécurité
       updateData.motDePasse = hashedPassword;
     }
 
     // ===== MISE À JOUR DE L'ÉTUDIANT =====
-    
     const updated = await Etudiant.findByIdAndUpdate(
       req.params.id, 
       updateData, 
@@ -839,24 +998,51 @@ app.put('/api/etudiants/:id', authAdmin, upload.single('image'), async (req, res
         new: true,
         runValidators: true
       }
-    ).select('-motDePasse'); // Ne pas retourner le mot de passe
+    ).select(''); // Ne pas retourner le mot de passe
 
     if (!updated) {
-      return res.status(404).json({ message: 'Étudiant non trouvé' });
+      return res.status(404).json({ message: 'Erreur lors de la mise à jour de l\'étudiant' });
     }
 
-    // Préparer la réponse avec les informations de paiement
+    // ===== PRÉPARATION DE LA RÉPONSE =====
     const etudiantResponse = updated.toObject();
+
+    // Calcul des informations de paiement
+    const montantBourse = (prixTotalNum * pourcentageBourseNum) / 100;
+    const montantAPayer = prixTotalNum - montantBourse;
+
+    // Détection des changements importants
+    const changementsImportants = [];
+    if (etudiantExistant.email !== updateData.email) {
+      changementsImportants.push('Email modifié');
+    }
+    if (etudiantExistant.codeMassar !== updateData.codeMassar) {
+      changementsImportants.push('Code Massar modifié');
+    }
+    if (etudiantExistant.paye !== updateData.paye) {
+      changementsImportants.push(`Statut de paiement: ${updateData.paye ? 'Payé' : 'Non payé'}`);
+    }
+    if (motDePasse && motDePasse.trim() !== '') {
+      changementsImportants.push('Mot de passe modifié');
+    }
 
     res.json({
       message: 'Étudiant mis à jour avec succès',
       etudiant: etudiantResponse,
-      // Informations supplémentaires sur le paiement
       infosPaiement: {
         montantTotal: prixTotalNum,
-        montantBourse: (prixTotalNum * pourcentageBourseNum) / 100,
-        montantAPayer: prixTotalNum - ((prixTotalNum * pourcentageBourseNum) / 100),
+        montantBourse: montantBourse,
+        montantAPayer: montantAPayer,
+        pourcentageBourse: pourcentageBourseNum,
+        typePaiement: typePaySelected,
         statutPaiement: payeBool ? 'Payé' : (prixTotalNum === 0 ? 'Gratuit' : 'En attente')
+      },
+      metadata: {
+        anneeScolaire: anneeScolaire.trim(),
+        niveau: niveau,
+        nombreCours: cours.length,
+        changementsImportants: changementsImportants,
+        dateMiseAJour: updated.updatedAt
       }
     });
 
@@ -884,14 +1070,22 @@ app.put('/api/etudiants/:id', authAdmin, upload.single('image'), async (req, res
       });
     }
 
+    // Gestion des erreurs de cast (ObjectId invalide)
+    if (err.name === 'CastError') {
+      if (err.path === '_id') {
+        return res.status(400).json({ message: 'ID d\'étudiant invalide' });
+      }
+      return res.status(400).json({
+        message: `Format invalide pour le champ ${err.path}`
+      });
+    }
+
     res.status(500).json({
       message: 'Erreur lors de la mise à jour',
       error: process.env.NODE_ENV === 'development' ? err.message : 'Une erreur est survenue'
     });
   }
 });
-
-
 
 
 
@@ -1112,231 +1306,6 @@ app.get('/api/etudiants', authAdmin, async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
-// 📌 توليد QR - فقط من طرف الأدمين
-// ✅ Nouveau endpoint pour générer le QR d'une seule journée
-
-app.post('/api/admin/qr-day-generate', async (req, res) => {
-  try {
-    const { date } = req.body;
-    if (!date) return res.status(400).json({ message: '❌ التاريخ مفقود' });
-
-    const jours = ['dimanche', 'lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi'];
-    const jourNom = jours[new Date(date).getDay()];
-
-    const QrSession = require('./models/QrSession');
-    const QrWeekPlanning = require('./models/QrWeekPlanning');
-    const Etudiant = require('./models/etudiantModel');
-    const Presence = require('./models/presenceModel');
-
-    // 🗑️ Supprimer toutes les sessions et présences du même jour
-    await QrSession.deleteMany({ date });
-    await Presence.deleteMany({ dateSession: date });
-
-    // 🔍 Récupérer les sessions de ce jour
-    const sessions = await QrWeekPlanning.find({ jour: jourNom });
-
-    const qrSessions = [];
-
-    for (const s of sessions) {
-      if (!s.periode || !s.horaire) {
-        return res.status(400).json({ message: `❌ Session invalide: période ou horaire manquant (cours: ${s.cours})` });
-      }
-
-      const currentPeriode = s.periode; // ❗ NE PAS raccourcir la période
-
-      // ✅ Créer la session QR
-      const newSession = await QrSession.create({
-        date,
-        periode: currentPeriode, // garder matin1, matin2, soir1, soir2...
-        cours: s.cours,
-        professeur: s.professeur,
-        matiere: s.matiere,
-        horaire: s.horaire
-      });
-
-      // ✅ Créer les présences par défaut pour tous les étudiants
-      const etudiants = await Etudiant.find({ cours: s.cours });
-      for (const etu of etudiants) {
-        await Presence.create({
-          etudiant: etu._id,
-          cours: s.cours,
-          dateSession: date,
-          periode: currentPeriode,
-          heure: s.horaire,
-          matiere: s.matiere,
-          present: false,
-          creePar: s.professeur,
-          nomProfesseur: ''
-        });
-      }
-
-      // Ajouter à la réponse
-      qrSessions.push({
-        date,
-        periode: currentPeriode,
-        cours: s.cours,
-        professeur: s.professeur,
-        matiere: s.matiere,
-        jour: jourNom,
-        horaire: s.horaire
-      });
-    }
-
-    res.status(200).json({
-      type: 'qr-day',
-      date,
-      jour: jourNom,
-      qrSessions
-    });
-
-  } catch (err) {
-    console.error('❌ Erreur generation QR day:', err);
-    res.status(500).json({ message: '❌ Erreur serveur lors de la génération du QR Day' });
-  }
-});
-
-
-app.post('/api/presence/qr/generate', authAdmin, async (req, res) => {
-  try {
-    const { classe, professeurId, matiere, horaire } = req.body;
-
-    if (!classe || !professeurId || !horaire) {
-      return res.status(400).json({ message: '❌ Classe, professeur et horaire sont requis' });
-    }
-
-    const now = new Date();
-    const date = now.toISOString().split('T')[0];
-    const hour = now.getHours();
-    const periode = hour < 12 ? 'matin' : 'soir';
-
-    // 🗑️ حذف الجلسة القديمة إن وجدت
-    await QrSession.deleteOne({ date, periode, cours: classe });
-
-    // ✅ إنشاء جلسة جديدة بـ البيانات الكاملة
-    const session = new QrSession({
-      date,
-      periode,
-      cours: classe,            // يجب أن يكون `cours`
-      professeur: professeurId,
-      matiere: matiere || '',
-      horaire
-    });
-
-    await session.save();
-
-    const qrPayload = JSON.stringify({
-      date,
-      periode,
-      cours: classe,
-      professeur: professeurId,
-      matiere,
-      horaire
-    });
-
-    res.status(200).json({
-      qrData: qrPayload,
-      payload: {
-        date,
-        periode,
-        cours: classe,
-        professeur: professeurId,
-        matiere,
-        horaire
-      }
-    });
-
-  } catch (err) {
-    console.error('❌ Erreur dans qr/generate:', err);
-    res.status(500).json({ message: '❌ Erreur serveur lors de la génération du QR' });
-  }
-});
-// ✅ /api/admin/save-week-planning
-app.post('/api/admin/save-week-planning', async (req, res) => {
-  const { planning } = req.body;
-  try {
-    for (const entry of planning) {
-      await QrWeekPlanning.findOneAndUpdate(
-        {
-          jour: entry.jour,
-          cours: entry.cours,
-          periode: entry.periode,
-          horaire: entry.horaire  // ✅ أضف التوقيت لتمييز الجلسات
-        },
-        entry,
-        { upsert: true, new: true }
-      );
-    }
-    res.status(200).json({ message: '✅ Planning sauvegardé avec succès' });
-  } catch (err) {
-    console.error('❌ Erreur sauvegarde planning:', err);
-    res.status(500).json({ message: '❌ Erreur lors de la sauvegarde' });
-  }
-});
-
-
-
-
-
-// ✅ route: GET /api/admin/qr-week
-app.get('/api/admin/qr-week', authAdmin, async (req, res) => {
-  try {
-    const plannings = await require('./models/QrWeekPlanning')
-      .find()
-      .populate('professeur', 'nom'); // فقط الاسم
-
-    res.status(200).json(plannings);
-  } catch (err) {
-    console.error('❌ Erreur lors de récupération de QrWeekPlanning:', err);
-    res.status(500).json({ message: 'Erreur serveur' });
-  }
-});
-
-app.post('/api/admin/fill-week', async (req, res) => {
-  try {
-    const jours = ['lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi'];
-    const periodes = ['matin', 'soir'];
-    const Cours = require('./models/coursModel');
-const Professeur = require('./models/professeurModel');
-
-    const QrWeekPlanning = require('./models/QrWeekPlanning');
-
-    const coursList = await Cours.find();
-
-    let count = 0;
-    for (const cours of coursList) {
-      const profNames = Array.isArray(cours.professeur) ? cours.professeur : [cours.professeur];
-
-      // جلب ObjectId لأول أستاذ في القائمة
-      const profDoc = await Professeur.findOne({ nom: profNames[0] });
-      if (!profDoc) continue; // تجاهل الدورة إن لم يوجد الأستاذ
-
-      for (const jour of jours) {
-        for (const periode of periodes) {
-          const existe = await QrWeekPlanning.findOne({ jour, periode, cours: cours.nom });
-          if (!existe) {
-            const plan = new QrWeekPlanning({
-              jour,
-              periode,
-              cours: cours.nom,
-              professeur: profDoc._id, // ✅ هنا استخدم الـ ObjectId الصحيح
-              matiere: cours.nom
-            });
-            await plan.save();
-            count++;
-          }
-        }
-      }
-    }
-
-    res.status(200).json({ message: `✅ ${count} تخطيط أسبوعي تم إدخاله بنجاح` });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: '❌ خطأ في ملء جدول الأسبوع' });
-  }
-});
-
-
-
 
 
 app.post('/api/cours', authAdmin, async (req, res) => {
@@ -1377,11 +1346,6 @@ app.post('/api/cours', authAdmin, async (req, res) => {
   }
 });
 
-
-
-
-// Mise à jour de l'état actif de l'étudiant
-// ✅ Basculer le statut actif d’un étudiant
 app.patch('/api/etudiants/:id/actif', authAdmin, async (req, res) => {
   try {
     const etudiant = await Etudiant.findById(req.params.id);
@@ -1530,48 +1494,7 @@ app.get('/api/evenements/:id', authAdmin, async (req, res) => {
     });
   }
 });
-app.post('/api/qr-session/complete', authProfesseur, async (req, res) => {
-  const { cours, dateSession, heure, periode, matiere, nomProfesseur } = req.body;
 
-  try {
-    // 🧑‍🎓 جلب كل الطلبة في هذا القسم
-    const etudiants = await Etudiant.find({ cours });
-
-    // ✅ جلب الحضور الموجود فعلاً (أي الذين قاموا بمسح الـ QR)
-    const presencesExistantes = await Presence.find({
-      cours,
-      dateSession: new Date(dateSession),
-      heure,
-      periode
-    });
-
-    const idsDejaPresents = presencesExistantes.map(p => String(p.etudiant));
-
-    // 🟥 استخراج الطلبة الذين لم يحضروا
-    const absents = etudiants.filter(e => !idsDejaPresents.includes(String(e._id)));
-
-    // 🔁 تسجيل كل طالب كغائب
-    for (let etu of absents) {
-      await Presence.create({
-        etudiant: etu._id,
-        cours,
-        dateSession: new Date(dateSession),
-        present: false,
-        creePar: req.professeurId,
-        heure,
-        periode,
-        matiere,
-        nomProfesseur
-      });
-    }
-
-    res.json({ message: `✅ تم تسجيل الغياب: ${absents.length} طالب غائب` });
-
-  } catch (err) {
-    console.error('❌ خطأ:', err);
-    res.status(500).json({ error: '❌ خطأ في الخادم أثناء إكمال الحضور' });
-  }
-});
 
 app.get('/api/professeur/presences', authProfesseur, async (req, res) => {
   const data = await Presence.find({ creePar: req.professeurId }).populate('etudiant', 'nomComplet');
@@ -1629,6 +1552,76 @@ app.get('/api/professeur/absences', authProfesseur, async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+// ==================== BULLETINS ====================
+
+// 📌 Récupérer tous les bulletins (Admin uniquement)
+app.get('/api/bulletins', authAdmin, async (req, res) => {
+  try {
+    const bulletins = await Bulletin.find()
+      .populate('etudiant', 'nomComplet email')
+      .populate('professeur', 'nomComplet email');
+    res.json(bulletins);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 📌 Créer un nouveau bulletin (Professeur)
+app.post('/api/bulletins', authProfesseur, async (req, res) => {
+  try {
+    const { etudiant, cours, semestre, notes, remarque, moyenneFinale } = req.body;
+
+    const nouveauBulletin = new Bulletin({
+      etudiant,
+      professeur: req.utilisateur.id, // récupéré via le token
+      cours,
+      semestre,
+      notes,
+      remarque,
+      moyenneFinale
+    });
+
+    await nouveauBulletin.save();
+    res.status(201).json(nouveauBulletin);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 📌 Supprimer un bulletin (Admin ou Professeur qui l’a créé)
+app.delete('/api/bulletins/:id', authAdminOrPaiementManager, async (req, res) => {
+  try {
+    const bulletin = await Bulletin.findById(req.params.id);
+    if (!bulletin) return res.status(404).json({ message: 'Bulletin introuvable' });
+
+    await Bulletin.findByIdAndDelete(req.params.id);
+    res.json({ message: 'Bulletin supprimé avec succès' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 📌 Récupérer les bulletins d’un professeur connecté
+app.get('/api/bulletins/professeur', authProfesseur, async (req, res) => {
+  try {
+    const bulletins = await Bulletin.find({ professeur: req.utilisateur.id })
+      .populate('etudiant', 'nomComplet email');
+    res.json(bulletins);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 📌 Récupérer les bulletins d’un étudiant connecté
+app.get('/api/bulletins/etudiant/me', authEtudiant, async (req, res) => {
+  try {
+    const bulletins = await Bulletin.find({ etudiant: req.utilisateur.id })
+      .populate('professeur', 'nomComplet email');
+    res.json(bulletins);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
 
 
 // ✅ فقط الكورسات التي يدرسها هذا الأستاذ
@@ -1678,14 +1671,6 @@ app.post('/api/presences', authProfesseur, async (req, res) => {
 });
 
 
-// Ajoutez ces routes à votre app.js après les routes existantes
-
-// ✅ Route pour récupérer toutes les notifications
-// 🔧 API de notifications corrigée avec debug
-
-
-
-// 🔧 Route de débogage spéciale
 app.get('/api/debug/notifications', authAdmin, async (req, res) => {
   try {
     const aujourdHui = new Date();
@@ -2124,11 +2109,7 @@ app.put('/api/professeur/exercices/:id/remarque', authProfesseur, async (req, re
   }
 });
 
-app.get('/api/live/:cours', authProfesseur, (req, res) => {
-  const { cours } = req.params;
-  const lien = genererLienLive(cours);
-  res.json({ lien });
-});
+
 app.delete('/api/cours/:id', authAdmin, async (req, res) => {
   try {
     const coursId = req.params.id;
@@ -2555,7 +2536,7 @@ app.put('/api/professeurs/:id', authAdmin, upload.single('image'), async (req, r
       professeurId,
       updateData,
       { new: true, runValidators: true }
-    ).select('-motDePasse');
+    ).select('');
 
     res.json({ message: "✅ Professeur modifié avec succès", professeur: updatedProf });
 

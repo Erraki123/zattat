@@ -39,7 +39,7 @@ const AdminMessages = () => {
     const fetchMessages = async () => {
       try {
         const token = localStorage.getItem('token'); // JWT token d'admin
-        const response = await fetch('http://195.179.229.230:5004/api/admin/contact-messages', {
+        const response = await fetch('http://localhost:5000/api/admin/contact-messages', {
           method: 'GET',
           headers: {
             'Authorization': `Bearer ${token}`,
@@ -68,7 +68,7 @@ const AdminMessages = () => {
     if (window.confirm('Êtes-vous sûr de vouloir supprimer ce message ?')) {
       try {
         const token = localStorage.getItem('token');
-        const response = await fetch(`http://195.179.229.230:5004/api/admin/contact-messages/${id}`, {
+        const response = await fetch(`http://localhost:5000/api/admin/contact-messages/${id}`, {
           method: 'DELETE',
           headers: {
             'Authorization': `Bearer ${token}`,

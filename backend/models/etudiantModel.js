@@ -23,6 +23,39 @@ const etudiantSchema = new mongoose.Schema({
     type: Date,
     required: true
   },
+niveau: {
+  type: String,
+  enum: [
+    // Collège
+    "6ème Collège",
+    "5ème Collège",
+    "4ème Collège",
+    "3ème Collège",
+
+    // Lycée Tronc Commun
+    "Tronc Commun Scientifique",
+    "Tronc Commun Littéraire",
+    "Tronc Commun Technique",
+
+    // 1ère Bac
+    "1BAC SM",     // Sciences Mathématiques
+    "1BAC PC",     // Sciences Physiques
+    "1BAC SVT",    // Sciences de la Vie et Terre
+    "1BAC Lettres",
+    "1BAC Économie",
+    "1BAC Technique",
+
+    // 2ème Bac
+    "2BAC SMA",    // Sciences Mathématiques A
+    "2BAC SMB",    // Sciences Mathématiques B
+    "2BAC PC",     // Sciences Physiques
+    "2BAC SVT",    // Sciences de la Vie et Terre
+    "2BAC Lettres",
+    "2BAC Économie",
+    "2BAC Technique"
+  ],
+  required: true
+},
 
   // Téléphones
   telephoneEtudiant: {

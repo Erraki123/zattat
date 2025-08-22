@@ -44,7 +44,7 @@ const PaymentManagerPage = () => {
       console.log('Fetching managers...');
       setLoading(true);
       
-      const res = await fetch('http://195.179.229.230:5004/api/admin/paiement-managers', { 
+      const res = await fetch('http://localhost:5000/api/admin/paiement-managers', { 
         headers,
         method: 'GET'
       });
@@ -138,8 +138,8 @@ const PaymentManagerPage = () => {
     
     try {
       const url = editingManager 
-        ? `http://195.179.229.230:5004/api/admin/paiement-managers/${editingManager._id}`
-        : 'http://195.179.229.230:5004/api/admin/paiement-managers';
+        ? `http://localhost:5000/api/admin/paiement-managers/${editingManager._id}`
+        : 'http://localhost:5000/api/admin/paiement-managers';
       
       const method = editingManager ? 'PUT' : 'POST';
       
@@ -203,7 +203,7 @@ const PaymentManagerPage = () => {
     setSuccess('');
     
     try {
-      const res = await fetch(`http://195.179.229.230:5004/api/admin/paiement-managers/${managerToDelete._id}`, {
+      const res = await fetch(`http://localhost:5000/api/admin/paiement-managers/${managerToDelete._id}`, {
         method: 'DELETE',
         headers
       });
@@ -237,7 +237,7 @@ const PaymentManagerPage = () => {
       setError('');
       setSuccess('');
       
-      const res = await fetch(`http://195.179.229.230:5004/api/admin/paiement-managers/${manager._id}/toggle-active`, {
+      const res = await fetch(`http://localhost:5000/api/admin/paiement-managers/${manager._id}/toggle-active`, {
         method: 'PATCH',
         headers
       });
@@ -344,10 +344,10 @@ const PaymentManagerPage = () => {
             <div className="header-info">
               <h1 className="page-title">
                 <CreditCard size={28} />
-                Gestion des Managers de Paiement
+                Gestion des Managers de Site
               </h1>
               <p className="page-subtitle">
-                Gérez les comptes des gestionnaires de paiement
+                Gérez les comptes des gestionnaires de site
               </p>
             </div>
             <button 
@@ -412,7 +412,7 @@ const PaymentManagerPage = () => {
           <div className="section-header">
             <h2 className="section-title">
               <CreditCard size={24} className="icon-green" />
-              Gestionnaires de Paiement ({managers.length})
+              Gestionnaires de Site ({managers.length})
             </h2>
             
             {managers.length > 0 && (
@@ -519,8 +519,8 @@ const PaymentManagerPage = () => {
               ) : (
                 <div className="no-students">
                   <CreditCard size={48} />
-                  <h3>Aucun gestionnaire de paiement</h3>
-                  <p>Commencez par créer votre premier gestionnaire de paiement</p>
+                  <h3>Aucun gestionnaire de Site</h3>
+                  <p>Commencez par créer votre premier gestionnaire de Site</p>
                   <button 
                     className="btn btn-primary" 
                     onClick={openAddModal}

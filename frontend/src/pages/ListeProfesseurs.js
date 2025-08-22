@@ -89,7 +89,7 @@ const ListeProfesseurs = () => {
     try {
       setLoading(true);
       const token = localStorage.getItem('token');
-      const res = await axios.get('http://195.179.229.230:5004/api/professeurs', {
+      const res = await axios.get('http://localhost:5000/api/professeurs', {
         headers: { Authorization: `Bearer ${token}` }
       });
       setProfesseurs(res.data);
@@ -103,7 +103,7 @@ const ListeProfesseurs = () => {
   const fetchCours = async () => {
     try {
       const token = localStorage.getItem('token');
-      const res = await axios.get('http://195.179.229.230:5004/api/cours', {
+      const res = await axios.get('http://localhost:5000/api/cours', {
         headers: { Authorization: `Bearer ${token}` }
       });
       setListeCours(res.data);
@@ -203,12 +203,12 @@ const ListeProfesseurs = () => {
       formData.append('email', formAjout.email);
       formData.append('motDePasse', formAjout.motDePasse);
       formData.append('actif', formAjout.actif);
-      formData.append('matiere', formAjout.matiere); // AJOUTER ICI
+      formData.append('matiere', formAjout.matiere);
 
       formAjout.cours.forEach(c => formData.append('cours[]', c));
       if (imageFile) formData.append('image', imageFile);
 
-      const response = await axios.post('http://195.179.229.230:5004/api/professeurs', formData, {
+      const response = await axios.post('http://localhost:5000/api/professeurs', formData, {
         headers: {
           Authorization: `Bearer ${token}`,
           'Content-Type': 'multipart/form-data'
@@ -217,7 +217,8 @@ const ListeProfesseurs = () => {
 
       setMessageAjout('✅ Professeur ajouté avec succès');
       
-      setProfesseurs([...professeurs, response.data]);
+      // Recharger automatiquement la liste des professeurs
+      await fetchProfesseurs();
       
       setFormAjout({
         nom: '',
@@ -227,7 +228,7 @@ const ListeProfesseurs = () => {
         email: '',
         motDePasse: '',
         cours: [],
-        matiere: '', // AJOUTER ICI
+        matiere: '',
         actif: true
       });
       setImageFile(null);
@@ -313,12 +314,12 @@ const ListeProfesseurs = () => {
       }
       
       formData.append('actif', formModifier.actif);
-      formData.append('matiere', formModifier.matiere); // AJOUTER ICI
+      formData.append('matiere', formModifier.matiere);
 
       formModifier.cours.forEach(c => formData.append('cours[]', c));
       if (imageFileModifier) formData.append('image', imageFileModifier);
 
-      const response = await axios.put(`http://195.179.229.230:5004/api/professeurs/${professeurAModifier._id}`, formData, {
+      const response = await axios.put(`http://localhost:5000/api/professeurs/${professeurAModifier._id}`, formData, {
         headers: {
           Authorization: `Bearer ${token}`,
           'Content-Type': 'multipart/form-data'
@@ -327,7 +328,8 @@ const ListeProfesseurs = () => {
 
       setMessageModifier('✅ Professeur modifié avec succès');
       
-setProfesseurs(professeurs.map(p => p._id === professeurAModifier._id ? response.data.professeur : p));
+      // Recharger automatiquement la liste des professeurs
+      await fetchProfesseurs();
       
       setTimeout(() => {
         closeEditModal();
@@ -343,7 +345,7 @@ setProfesseurs(professeurs.map(p => p._id === professeurAModifier._id ? response
   const handleToggleActif = async (id) => {
     try {
       const token = localStorage.getItem('token');
-      const res = await axios.patch(`http://195.179.229.230:5004/api/professeurs/${id}/actif`, {}, {
+      const res = await axios.patch(`http://localhost:5000/api/professeurs/${id}/actif`, {}, {
         headers: { Authorization: `Bearer ${token}` }
       });
       setProfesseurs(professeurs.map(p => p._id === id ? res.data : p));
@@ -357,7 +359,7 @@ setProfesseurs(professeurs.map(p => p._id === professeurAModifier._id ? response
 
     try {
       const token = localStorage.getItem('token');
-      await axios.delete(`http://195.179.229.230:5004/api/professeurs/${id}`, {
+      await axios.delete(`http://localhost:5000/api/professeurs/${id}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       setProfesseurs(professeurs.filter(p => p._id !== id));
@@ -593,7 +595,7 @@ setProfesseurs(professeurs.map(p => p._id === professeurAModifier._id ? response
                     <td className="image-colonne">
                       {p.image ? (
                         <img 
-                          src={`http://195.179.229.230:5004${p.image}`} 
+                          src={`http://localhost:5000${p.image}`} 
                           alt="professeur" 
                           className="image-etudiant"
                         />
@@ -606,19 +608,19 @@ setProfesseurs(professeurs.map(p => p._id === professeurAModifier._id ? response
                         onClick={() => handleView(p)}
                         className="btn-voir"
                       >
-                        Voir
+                      <Eye size={16} />
                       </button>
                       <button 
                         onClick={() => handleEdit(p)}
                         className="btn-modifier"
                       >
-                        Modifier
+                      <Edit size={16} />
                       </button>
                       <button 
                         onClick={() => handleDelete(p._id)}
                         className="btn-supprimer"
                       >
-                        Supprimer
+                      <Trash2 size={16} />
                       </button>
                     </td>
                   </tr>
@@ -642,7 +644,7 @@ setProfesseurs(professeurs.map(p => p._id === professeurAModifier._id ? response
                     <div className="carte-image">
                       {p.image ? (
                         <img 
-                          src={`http://195.179.229.230:5004${p.image}`} 
+                          src={`http://localhost:5000${p.image}`} 
                           alt="professeur" 
                           className="carte-photo"
                         />
@@ -969,7 +971,7 @@ setProfesseurs(professeurs.map(p => p._id === professeurAModifier._id ? response
           <div className="etudiant-image-section">
             {professeurSelectionne.image ? (
               <img 
-                src={`http://195.179.229.230:5004${professeurSelectionne.image}`} 
+                src={`http://localhost:5000${professeurSelectionne.image}`} 
                 alt="Photo du professeur" 
                 className="etudiant-image-large"
               />
@@ -1203,7 +1205,7 @@ setProfesseurs(professeurs.map(p => p._id === professeurAModifier._id ? response
             <div className="image-actuelle">
               <small>Image actuelle :</small>
               <img 
-                src={`http://195.179.229.230:5004${professeurAModifier.image}`} 
+                src={`http://localhost:5000${professeurAModifier.image}`} 
                 alt="Image actuelle" 
                 className="image-preview"
                 style={{width: '50px', height: '50px', objectFit: 'cover', borderRadius: '4px'}}

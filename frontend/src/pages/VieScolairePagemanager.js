@@ -99,7 +99,7 @@ const VieScolairePage = () => {
         params.append('search', searchTerm.trim());
       }
 
-      const response = await fetch(`http://195.179.229.230:5004/api/vie-scolaire?${params}`);
+      const response = await fetch(`http://localhost:5000/api/vie-scolaire?${params}`);
       
       if (!response.ok) {
         throw new Error(`Erreur ${response.status}: ${response.statusText}`);
@@ -123,7 +123,7 @@ const VieScolairePage = () => {
   // Fonction pour charger une activité spécifique
   const fetchActivityDetails = async (activityId) => {
     try {
-      const response = await fetch(`http://195.179.229.230:5004/api/vie-scolaire/${activityId}`);
+      const response = await fetch(`http://localhost:5000/api/vie-scolaire/${activityId}`);
       
       if (!response.ok) {
         throw new Error(`Erreur ${response.status}: ${response.statusText}`);
@@ -585,7 +585,7 @@ const VieScolairePage = () => {
                     {hasImages ? (
                       <>
                         <img
-                          src={`http://195.179.229.230:5004${activity.images[currentImageIndex]}`}
+                          src={`http://localhost:5000${activity.images[currentImageIndex]}`}
                           alt={activity.title}
                           style={{
                             width: '100%',
@@ -1080,7 +1080,7 @@ const VieScolairePage = () => {
                 overflow: 'hidden' 
               }}>
                 <img 
-                  src={`http://195.179.229.230:5004${selectedActivity.images[modalImageIndex]}`} 
+                  src={`http://localhost:5000${selectedActivity.images[modalImageIndex]}`} 
                   alt={selectedActivity.title}
                   style={{
                     width: '100%',

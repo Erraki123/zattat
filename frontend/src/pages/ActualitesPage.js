@@ -63,7 +63,7 @@ const ActualitesPage = () => {
         params.append('sortBy', sortBy);
       }
 
-      const response = await fetch(`http://195.179.229.230:5004/api/actualites?${params.toString()}`);
+      const response = await fetch(`http://localhost:5000/api/actualites?${params.toString()}`);
       
       if (!response.ok) {
         throw new Error(`Erreur HTTP: ${response.status}`);
@@ -848,7 +848,7 @@ const ActualitesPage = () => {
                     <div style={styles.newsHeader} className="news-header">
                       {news.image && (
                         <img 
-                          src={`http://195.179.229.230:5004${news.image}`} 
+                          src={`http://localhost:5000${news.image}`} 
                           alt={news.title}
                           style={styles.newsImage}
                           className="news-image"

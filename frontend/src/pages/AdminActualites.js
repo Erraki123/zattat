@@ -91,7 +91,7 @@ const AdminActualites = () => {
   const fetchActualites = async () => {
     setLoading(true);
     try {
-      const res = await fetch('http://195.179.229.230:5004/api/actualites', {
+      const res = await fetch('http://localhost:5000/api/actualites', {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       const data = await res.json();
@@ -122,7 +122,7 @@ const AdminActualites = () => {
     });
     if (image) formData.append('image', image);
 
-    const url = editingId ? `http://195.179.229.230:5004/api/actualites/${editingId}` : 'http://195.179.229.230:5004/api/actualites';
+    const url = editingId ? `http://localhost:5000/api/actualites/${editingId}` : 'http://localhost:5000/api/actualites';
     const method = editingId ? 'PUT' : 'POST';
 
     try {
@@ -201,7 +201,7 @@ const AdminActualites = () => {
     if (!selectedItem) return;
     setLoading(true);
     try {
-      const res = await fetch(`http://195.179.229.230:5004/api/actualites/${selectedItem._id}`, {
+      const res = await fetch(`http://localhost:5000/api/actualites/${selectedItem._id}`, {
         method: 'DELETE',
         headers: { 'Authorization': `Bearer ${token}` }
       });
@@ -457,7 +457,7 @@ const AdminActualites = () => {
                   <div style={styles.viewSection}>
                     <strong>Image:</strong>
                     <img 
-                      src={`http://195.179.229.230:5004${selectedItem.image}`} 
+                      src={`http://localhost:5000${selectedItem.image}`} 
                       alt="Aperçu" 
                       style={styles.viewImage}
                     />
@@ -523,7 +523,7 @@ const AdminActualites = () => {
               <td style={styles.td}>
                 {actu.image ? (
                   <img 
-                    src={`http://195.179.229.230:5004${actu.image}`} 
+                    src={`http://localhost:5000${actu.image}`} 
                     alt="Aperçu" 
                     style={styles.thumbnailImage}
                   />
@@ -579,7 +579,7 @@ const AdminActualites = () => {
           
           {actu.image && (
             <img 
-              src={`http://195.179.229.230:5004${actu.image}`} 
+              src={`http://localhost:5000${actu.image}`} 
               alt="Image actualité" 
               style={styles.cardImage}
             />

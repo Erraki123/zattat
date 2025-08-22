@@ -118,7 +118,7 @@ const [filters, setFilters] = useState({
   const fetchPaiements = async () => {
     try {
       const token = localStorage.getItem('token');
-      const res = await fetch('http://195.179.229.230:5004/api/paiements', {
+      const res = await fetch('http://localhost:5000/api/paiements', {
         headers: { Authorization: `Bearer ${token}` }
       });
       const data = await res.json();
@@ -132,7 +132,7 @@ const [filters, setFilters] = useState({
   const fetchExpirés = async () => {
     try {
       const token = localStorage.getItem('token');
-      const res = await fetch('http://195.179.229.230:5004/api/paiements/exp', {
+      const res = await fetch('http://localhost:5000/api/paiements/exp', {
         headers: { Authorization: `Bearer ${token}` }
       });
       const data = await res.json();
@@ -369,32 +369,206 @@ const AdvancedFilters = () => (
     window.location.href = '/ajouter-paiement';
   };
 
-  const generatePDF = (p) => {
-    // Vous devez importer jsPDF et autoTable en haut du fichier :
-    // import jsPDF from 'jspdf';
-    // import autoTable from 'jspdf-autotable';
-    
-    const doc = new jsPDF();
-    doc.setFontSize(16);
-    doc.text('Reçu de Paiement', 14, 20);
-
-    autoTable(doc, {
-      startY: 30,
-      head: [['Information', 'Valeur']],
-      body: [
-        ['Étudiant', p.etudiant?.nomComplet || '—'],
-        ['Cours', p.cours],
-        ['Montant', `${p.montant} Dh`],
-        ['Durée', `${p.nombreMois} mois`],
-        ['Début', formatDate(p.moisDebut)],
-['Date de paiement', formatDate(p.createdAt)],
-        ['Note', p.note || '—']
-      ],
-    });
-
-    doc.autoPrint();
-    window.open(doc.output('bloburl'), '_blank');
+const generatePDF = (p) => {
+  // Format chèque bancaire standard
+  const doc = new jsPDF('landscape', 'mm', [210, 100]); // Format chèque allongé
+  
+  // Couleurs du thème
+  const colors = {
+    primary: [230, 0, 57],          // Rouge principal
+    secondary: [138, 43, 226],       // Violet 
+    accent: [111, 66, 193],         // Violet foncé
+    dark: [44, 62, 80],             // Gris foncé
+    light: [249, 249, 249],         // Gris très clair
+    border: [200, 200, 200],        // Gris bordure
+    white: [255, 255, 255]
   };
+
+  // === BORDURES DE CHÈQUE ===
+  // Bordure principale
+  doc.setDrawColor(...colors.primary);
+  doc.setLineWidth(1);
+  doc.rect(5, 5, 200, 90);
+  
+  // Bordure interne
+  doc.setDrawColor(...colors.border);
+  doc.setLineWidth(0.3);
+  doc.rect(8, 8, 194, 84);
+
+  // === EN-TÊTE STYLE CHÈQUE ===
+  // Logo à gauche
+  try {
+    doc.addImage('/logo-ak-removebg-preview.png', 'PNG', 12, 12, 20, 20);
+  } catch (error) {
+    console.log('Logo non trouvé:', error);
+  }
+  
+  // Informations établissement (style banque)
+  doc.setTextColor(...colors.dark);
+  doc.setFontSize(10);
+  doc.setFont('helvetica', 'bold');
+  doc.text('CENTRE DE FORMATION ALFRED KASTLER', 40, 17);
+  
+  doc.setFontSize(7);
+  doc.setFont('helvetica', 'normal');
+  doc.text('130, Boulevard Ali Yaàta, Hay Al Mohammadi, Casablanca', 40, 22);
+  doc.text('Tél: +212 5 22 62 81 82 | Email: contact@kastler.ma', 40, 26);
+
+  // Titre REÇU à droite
+  doc.setTextColor(...colors.primary);
+  doc.setFontSize(16);
+  doc.setFont('helvetica', 'bold');
+  doc.text('REÇU DE PAIEMENT', 145, 20);
+  
+  // Numéro et date
+  doc.setFontSize(8);
+  doc.setTextColor(...colors.secondary);
+  const receiptNum = `N° ${Date.now().toString().slice(-6)}`;
+  doc.text(receiptNum, 170, 26);
+  doc.text(new Date().toLocaleDateString('fr-FR'), 170, 30);
+
+  // === LIGNE DE SÉPARATION ===
+  doc.setDrawColor(...colors.primary);
+  doc.setLineWidth(0.5);
+  doc.line(12, 36, 198, 36);
+
+  // === CORPS DU CHÈQUE ===
+  let yPos = 45;
+
+  // Ligne "Payé à l'ordre de" (style chèque)
+  doc.setFontSize(9);
+  doc.setTextColor(...colors.dark);
+  doc.setFont('helvetica', 'bold');
+  doc.text('Reçu de:', 15, yPos);
+  
+  // Ligne pour le nom
+  doc.setDrawColor(...colors.border);
+  doc.setLineWidth(0.3);
+  doc.line(35, yPos + 1, 120, yPos + 1);
+  
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(10);
+  doc.text(p.etudiant?.nomComplet || '___________________', 40, yPos - 1);
+
+  // Montant en chiffres (coin droit)
+  doc.setFillColor(...colors.light);
+  doc.setDrawColor(...colors.primary);
+  doc.setLineWidth(1);
+  doc.roundedRect(140, yPos - 8, 55, 12, 2, 2, 'FD');
+  
+  doc.setTextColor(...colors.primary);
+  doc.setFontSize(12);
+  doc.setFont('helvetica', 'bold');
+  doc.text(`${p.montant} DH`, 167, yPos - 2, { align: 'center' });
+
+  // === DEUXIÈME LIGNE ===
+  yPos += 12;
+  
+  doc.setFontSize(9);
+  doc.setTextColor(...colors.dark);
+  doc.setFont('helvetica', 'bold');
+  doc.text('La somme de:', 15, yPos);
+  
+  // Ligne pour le montant en lettres
+  doc.setDrawColor(...colors.border);
+  doc.line(40, yPos + 1, 195, yPos + 1);
+  
+  // Conversion du montant en lettres (fonction à implémenter si nécessaire)
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(9);
+  const montantEnLettres = convertirMontantEnLettres(p.montant);
+  doc.text(montantEnLettres, 45, yPos - 1);
+
+  // === TROISIÈME LIGNE ===
+  yPos += 12;
+  
+  doc.setFontSize(8);
+  doc.setFont('helvetica', 'bold');
+  doc.text('Classe:', 15, yPos);
+  doc.setFont('helvetica', 'normal');
+  const classe = Array.isArray(p.cours) ? p.cours.join(', ') : p.cours;
+  doc.text(classe, 30, yPos);
+  
+  doc.setFont('helvetica', 'bold');
+  doc.text('Période:', 120, yPos);
+  doc.setFont('helvetica', 'normal');
+  doc.text(`${formatDate(p.moisDebut)} (${p.nombreMois} mois)`, 140, yPos);
+
+  // === SIGNATURE ET DATE ===
+  yPos += 15;
+  
+  // Date de paiement
+  doc.setFontSize(8);
+  doc.setFont('helvetica', 'bold');
+  doc.text('Casablanca, le:', 15, yPos);
+  doc.setFont('helvetica', 'normal');
+  doc.text(formatDate(p.createdAt), 45, yPos);
+  
+  // Zone signature
+  doc.setFont('helvetica', 'bold');
+  doc.text('Signature & Cachet:', 120, yPos);
+  
+  // Encadré signature
+  doc.setDrawColor(...colors.border);
+  doc.setLineWidth(0.3);
+  doc.rect(120, yPos + 2, 50, 15);
+
+  // === PIED DE CHÈQUE ===
+  yPos = 85;
+  
+  // Bande de validation
+  doc.setFillColor(...colors.secondary);
+  doc.rect(8, yPos, 194, 7, 'F');
+  
+  doc.setTextColor(...colors.white);
+  doc.setFontSize(8);
+  doc.setFont('helvetica', 'bold');
+  doc.text('✓ REÇU OFFICIEL VALIDE - PAIEMENT CONFIRMÉ', 105, yPos + 4, { align: 'center' });
+
+  // Note si présente
+  if (p.note && p.note.trim() !== '') {
+    doc.setTextColor(...colors.dark);
+    doc.setFontSize(7);
+    doc.setFont('helvetica', 'italic');
+    doc.text(`Note: ${p.note}`, 15, 78);
+  }
+
+  // === GÉNÉRATION ===
+  doc.autoPrint();
+  window.open(doc.output('bloburl'), '_blank');
+};
+
+// Fonction helper pour convertir le montant en lettres
+function convertirMontantEnLettres(montant) {
+  // Implémentation basique - peut être améliorée
+  const unites = ['', 'un', 'deux', 'trois', 'quatre', 'cinq', 'six', 'sept', 'huit', 'neuf'];
+  const dizaines = ['', '', 'vingt', 'trente', 'quarante', 'cinquante', 'soixante', 'soixante-dix', 'quatre-vingt', 'quatre-vingt-dix'];
+  const centaines = ['', 'cent', 'deux cents', 'trois cents', 'quatre cents', 'cinq cents', 'six cents', 'sept cents', 'huit cents', 'neuf cents'];
+  
+  if (montant < 1000) {
+    // Conversion simple pour les montants inférieurs à 1000
+    if (montant < 10) return `${unites[montant]} dirhams`;
+    if (montant < 100) {
+      const d = Math.floor(montant / 10);
+      const u = montant % 10;
+      return `${dizaines[d]}${u > 0 ? '-' + unites[u] : ''} dirhams`;
+    }
+    const c = Math.floor(montant / 100);
+    const reste = montant % 100;
+    let result = centaines[c];
+    if (reste > 0) {
+      if (reste < 10) result += ` ${unites[reste]}`;
+      else {
+        const d = Math.floor(reste / 10);
+        const u = reste % 10;
+        result += ` ${dizaines[d]}${u > 0 ? '-' + unites[u] : ''}`;
+      }
+    }
+    return `${result} dirhams`;
+  }
+  
+  return `${montant} dirhams`; // Fallback pour les gros montants
+}
 
   const openDetailModal = (paiement) => {
     setSelectedPaiement(paiement);
